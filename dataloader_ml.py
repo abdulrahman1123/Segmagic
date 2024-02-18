@@ -17,8 +17,6 @@ class DataLoader():
         self.base_path = base_path
         self.labels = labels
         self.positions = os.listdir(self.base_path + "/QuPath/data")
-        
-        
 
         print('Loading data:')
 
@@ -74,7 +72,6 @@ class DataLoader():
         self.train_val_data, self.test_data = train_test_split(self.training_data, test_size=test_ratio, random_state=42)
         self.train_data, self.valid_data = train_test_split(self.train_val_data, test_size=valid_ratio, random_state=random)
         print('split into training: '+ str(len(self.train_data)) + ', valid: ' + str(len(self.valid_data)) + ', and testing: ' + str(len(self.test_data)))
-        print(self.valid_data[-1].info_dict["image_name"])
     
     def run_data_loader(self, kernel_size=256, batch_size=4):
         augmentations = A.Compose([
