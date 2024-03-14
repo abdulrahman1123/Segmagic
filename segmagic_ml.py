@@ -1,4 +1,3 @@
-from model.single_channel_model import SCUnet
 import torch
 from model_ml import Model
 import pytorch_lightning as lit
@@ -172,6 +171,7 @@ class Segmagic():
                         
                     else:
                         pred = self.model(img_tile.cuda())
+
                     pred = pred.squeeze(0).sigmoid().cpu().numpy()
                     
                     pred = pred.transpose(1, 2, 0)
@@ -186,16 +186,34 @@ class Segmagic():
 
         # remove padding
         predicted_mask = predicted_mask[int(y_padding/2):image_height+math.ceil(y_padding/2), int(x_padding/2):image_width+math.ceil(x_padding/2)]
+
+        # uncertainty measure
+        # numpy array p_hat with dimension (N_uncertain, width, height, depth)
+        
+        p_hat = np.expand_dims(predicted_mask, axis=0)
+        epistemic = np.mean(p_hat**2, axis=0) - np.mean(p_hat, axis=0)**2
+        aleatoric = np.mean(p_hat*(1-p_hat), axis=0)
+        # Add uncertainties
+        uncertainty = epistemic + aleatoric
+        # Scale to 1 max overall
+        uncertainty /= 0.25
+
         predicted_mask = np.uint8((predicted_mask>threshold)*255)
 
         if show:
             for label in range(len(labels)):
-                plt.figure(figsize=(5,5))
-                plt.imshow(image_to_predict[0,:,:], cmap='gray')
-                plt.imshow(predicted_mask[..., label], alpha=0.4, cmap="inferno")
+                # make subfigures and also show the uncertainty
+
+                fig, axs = plt.subplots(1,2, figsize=(10,5))
+                axs[0].set_title('Prediction')
+                axs[0].imshow(image_to_predict[0,:,:], cmap='gray')
+                axs[0].imshow(predicted_mask[..., label], alpha=0.4, cmap="inferno")
+
+                axs[1].set_title('Uncertainty')
+                axs[1].imshow(uncertainty[..., label], cmap="gray")
                 plt.show()
 
-        return predicted_mask
+        return predicted_mask, uncertainty
     
     def get_dice(self, img1, img2):
         img1 = np.asarray(img1).astype(bool)
@@ -209,15 +227,16 @@ class Segmagic():
             os.mkdir(data.base_path+'/Testing/images')
             os.mkdir(data.base_path+'/Testing/masks_ann')
             os.mkdir(data.base_path+'/Testing/masks_pred')
+            os.mkdir(data.base_path+'/Testing/masks_uncertainty')
         except:
             pass
 
-        results = {'image_name':[], 'Dice_score':[]}
+        results = {'image_name':[], 'Dice_score':[], 'Uncertainty_score':[]}
         for i in range(len(data.test_data)):
             image_to_predict = data.test_data[i]
             
             test_image = image_to_predict.load_image(image_to_predict.regions[0], (0,0,image_to_predict.image_height,image_to_predict.image_width))
-            predicted_mask = self.predict_image(test_image, data.labels, kernel_size=256, show=False)
+            predicted_mask, uncertainty = self.predict_image(test_image, data.labels, kernel_size=256, show=False)
             
             img = image_to_predict.load_image(image_to_predict.regions[0], (0,0,image_to_predict.image_height,image_to_predict.image_width))
             mask = image_to_predict.get_mask(image_to_predict.regions[0], (0,0,image_to_predict.image_height,image_to_predict.image_width))
@@ -226,14 +245,18 @@ class Segmagic():
             tiff.imwrite(data.base_path+'/Testing/images/'+ name, img)
             tiff.imwrite(data.base_path+'/Testing/masks_ann/'+ name, np.uint8(mask.transpose(1, 2, 0)*255))
             tiff.imwrite(data.base_path+'/Testing/masks_pred/'+ name, predicted_mask)
+            tiff.imwrite(data.base_path+'/Testing/masks_uncertainty/'+ name, np.uint8(uncertainty*255))
+            # divide by 255 if analyzing the uncertainty later!
             
 
             for label in range(len(data.labels)):
                 results['image_name'].append(name+'_'+data.labels[label])
                 dice = self.get_dice(mask[label,:,:], predicted_mask[..., label])
+                uncertainty_score = np.mean(uncertainty[..., label][predicted_mask[..., label]>0])
                 results['Dice_score'].append(dice)
+                results['Uncertainty_score'].append(uncertainty_score)
 
-                fig, axs = plt.subplots(1,2, figsize=(10,5))
+                fig, axs = plt.subplots(1,3, figsize=(15,5))
 
                 axs[0].set_title('Annotation')
                 axs[0].imshow(img[0,:,:], cmap='gray')
@@ -242,6 +265,9 @@ class Segmagic():
                 axs[1].set_title('Prediction Dice: '+str(round(dice,3)))
                 axs[1].imshow(img[0,:,:], cmap='gray')
                 axs[1].imshow(predicted_mask[..., label], alpha=0.4, cmap="inferno")
+
+                axs[2].set_title('Uncertainty: '+str(round(uncertainty_score,3)))
+                axs[2].imshow(uncertainty[..., label], cmap="gray")
                 plt.savefig(f"{data.base_path}/Testing/Test_result_{data.labels[label]}_"+str(i)+'.png')
                 plt.show()
             
@@ -251,10 +277,12 @@ class Segmagic():
     def predict_folder(self, folder_path, labels, show=False):
         folder_saveto = folder_path + '_pred/masks'
         folder_saveto_json = folder_path + '_pred/jsons'
+        folder_saveto_uncertainty = folder_path + '_pred/uncertainty'
         try:
             os.mkdir(folder_path + '_pred')
             os.mkdir(folder_saveto)
             os.mkdir(folder_saveto_json)
+            os.mkdir(folder_saveto_uncertainty)
         except:
             pass
         filepaths = glob.glob(f"{folder_path}/*.tif")
@@ -266,8 +294,9 @@ class Segmagic():
             image_to_predict = tiff.imread(filepath)
             image_to_predict = image_to_predict.transpose(2, 0, 1)
 
-            predicted_mask = self.predict_image(image_to_predict, labels, show=show)
+            predicted_mask, uncertainty = self.predict_image(image_to_predict, labels, show=show)
             tiff.imwrite(f"{folder_saveto}/{filename}", predicted_mask, metadata={'labels': labels})
+            tiff.imwrite(f"{folder_saveto_uncertainty}/{filename}", np.uint8(uncertainty*255), metadata={'labels': labels})
 
             self.save_geojson(predicted_mask, labels, f"{folder_saveto_json}/{filename}")
 
