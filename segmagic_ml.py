@@ -70,9 +70,14 @@ class Segmagic():
             self.ensemble = True
             self.models = []
             for filepath in filepaths:
-                model = torch.load(filepath)
-                model.eval()
-                model.cuda()
+                if torch.cuda.is_available():
+                    model = torch.load(filepath)
+                    model.eval()
+                    model.cuda()
+                else:
+                    model = torch.load(filepath, map_location=torch.device('cpu'))
+                    model.eval()
+                
                 self.models.append(model)
 
             #self.fmodel, self.params, self.buffers = combine_state_for_ensemble(self.models)
@@ -163,7 +168,10 @@ class Segmagic():
                     if self.ensemble:
                         outputs = []
                         for model in self.models:
-                            pred_m = model(img_tile.cuda())
+                            if torch.cuda.is_available():
+                                pred_m = model(img_tile.cuda())
+                            else:
+                                pred_m = model(img_tile)
                             outputs.append(pred_m)
                             
                         pred = sum(outputs) / len(outputs)
