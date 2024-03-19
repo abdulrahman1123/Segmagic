@@ -67,7 +67,7 @@ def find_intensity(image_dir,data):
 
 # Choose by image
 base_path = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic"
-data = pd.read_excel(base_path+'/pt_info.xlsx')
+#data = pd.read_excel(base_path+'/pt_info.xlsx')
 #image_dir = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic\all_images\CRPS004_hand_3.tif" #CRPS007P3#CRPS004P1
 
 #find_intensity(image_dir,data, show = True)
@@ -82,6 +82,9 @@ class MyWindow(QWidget):
 
         # Create QHBoxLayout for labels
         hbox_layout = QHBoxLayout()
+        dataselection_lo = QHBoxLayout()
+        imageselection_lo = QHBoxLayout()
+        finalset_lo = QHBoxLayout()
         
         # Create QLabel objects
         self.title_label = QLabel("ScintiSegmenter (or ScintIntensify)", self)
@@ -92,28 +95,51 @@ class MyWindow(QWidget):
 
         sub_text = "Choose the image to be segmented and intensity calculated.\nThe image file should have the following naming scheme 'subjectid_extremity_phase#' (e.g. CRPS001_hand_3)"
         self.sub_label = QLabel(sub_text, self)
+        self.sub_label.setWordWrap(True)
         font_sub = QFont("Calibri", 12)
         self.sub_label.setFont(font_sub)
         self.sub_label.setAlignment(Qt.AlignCenter)  # Align text to the center
 
         self.label1 = QLabel()
-        self.label2 = QLabel()
+        #self.label2 = QLabel()
 
+        # Styles
+        style_allround = "border-radius: 5px; background-color: lightgrey"
+        style_right_round = "border-bottom-right-radius: 10px; border-top-right-radius: 10px; background-color: lightgrey"
+        style_left_round = "border-bottom-left-radius: 10px; border-top-left-radius: 10px; border-color: black"
+        
         self.label1.setFixedSize(420, 400)
-        self.label2.setFixedSize(420, 400)
+        #self.label2.setFixedSize(420, 400)
 
         # Add QLabel objects to QHBoxLayout
         hbox_layout.addWidget(self.label1)
-        hbox_layout.addWidget(self.label2)
+        #hbox_layout.addWidget(self.label2)
         
-        # Create QLineEdit and QPushButton
+        # Create data selection widgets
+        self.data_path_line = QLineEdit()
+        self.data_path_line.setFixedHeight(30)
+        databrowse_button = QPushButton("Load data frame")
+        databrowse_button.setStyleSheet(style_right_round)
+        databrowse_button.setFixedSize(100, 30)
+        self.data_path_line.setStyleSheet(style_left_round)
+        dataselection_lo.addWidget(self.data_path_line)
+        dataselection_lo.addWidget(databrowse_button)
+
+        # Create image selection widgets
         self.image_path_line = QLineEdit()
         browse_button = QPushButton("Load Image")
+        imageselection_lo.addWidget(self.image_path_line)
+        imageselection_lo.addWidget(browse_button)
+
+        # Final set of buttons
         segment_button = QPushButton("Segment")
         exit_button = QPushButton("Exit")
-
+        finalset_lo.addWidget(segment_button)
+        finalset_lo.addWidget(exit_button)
+        
         # Connect button click event to function
         browse_button.clicked.connect(self.browse_image)
+        databrowse_button.clicked.connect(self.browse_data)
         segment_button.clicked.connect(self.segment)
         exit_button.clicked.connect(self.close)
         
@@ -121,13 +147,18 @@ class MyWindow(QWidget):
         main_layout.addWidget(self.title_label)
         main_layout.addWidget(self.sub_label)
         main_layout.addLayout(hbox_layout)
-        main_layout.addWidget(self.image_path_line)
-        main_layout.addWidget(browse_button)
-        main_layout.addWidget(segment_button)
-        main_layout.addWidget(exit_button)
+        main_layout.addLayout(dataselection_lo)
+        main_layout.addLayout(imageselection_lo)
+        main_layout.addLayout(finalset_lo)
 
         # Set the layout
         self.setLayout(main_layout)
+
+    def browse_data(self):
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Images (*.xlsx);;All Files (*)", options=options)
+        if file_path:
+            self.data_path_line.setText(file_path)
 
     def browse_image(self):
         options = QFileDialog.Options()
@@ -136,14 +167,15 @@ class MyWindow(QWidget):
             self.image_path_line.setText(file_path)
             self.load_image()
 
-
     def load_image(self):
         image_path = self.image_path_line.text()
         pixmap = QPixmap(image_path)
         # Set the pixmap to the first QLabel
         self.label1.setPixmap(pixmap.scaled(self.label1.size(), QtCore.Qt.KeepAspectRatio))
-        self.label2.clear()
+
     def segment(self):
+        data = pd.read_excel(self.data_path_line.text())
+        print(data)
         image_dir = self.image_path_line.text()
         if os.path.exists(image_dir):
             image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,data)
@@ -163,7 +195,7 @@ class MyWindow(QWidget):
             plt.savefig(base_path+"/temp_file.png")
             
             pixmap_regions = QPixmap(base_path+"/temp_file.png")
-            self.label2.setPixmap(pixmap_regions.scaled(self.label2.size(), QtCore.Qt.KeepAspectRatio))
+            self.label1.setPixmap(pixmap_regions.scaled(self.label1.size(), QtCore.Qt.KeepAspectRatio))
 
     def fig_to_pixmap(self, fig):
         """Convert matplotlib figure to QPixmap."""
