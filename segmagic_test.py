@@ -1,21 +1,17 @@
 from segmagic_ml import Segmagic
-import tifffile as tiff
-from scipy.spatial import ConvexHull
-import cv2
+from tifffile import imread
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
 
-
 import pandas as pd
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFileDialog
-from PyQt5.QtGui import QPixmap,QFont,QImage
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView
+from PyQt5.QtGui import QPixmap,QFont,QImage,QIcon
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 import os
 
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 def find_intensity(image_dir,data):
     seg = Segmagic(base_path)
@@ -25,13 +21,15 @@ def find_intensity(image_dir,data):
                     The given name is {'_'.join(name_split)}")
     # Extract importat information
     id, model_type, phase = name_split
-    afctd_side = data.loc[data['ID']==id,'affected_extremity'].values[0]
+    afctd_side = data.loc[data['ID']==id,'affected_extremity'].values[0].lower()
     labels = [model_type]
 
     # predict mask
-    image_to_predict = tiff.imread(image_dir).transpose(2, 0, 1)
+    image_to_predict = imread(image_dir).transpose(2, 0, 1)
     predicted_mask, uncertainty = seg.predict_image(image_to_predict, labels, show=True)
-    labeled_mask, n_masks = label(predicted_mask, return_num=True)
+    labeled_mask = label(predicted_mask)
+    region_inds, region_count = np.unique(labeled_mask, return_counts=True)
+    n_masks = len(np.where(region_count>1500)[0])-1
     
     # if the resulting mask is just one big mask, add a vertical line to split the image into two
     if n_masks==1:
@@ -45,7 +43,10 @@ def find_intensity(image_dir,data):
 
     # choose the biggest 2 regions and label them
     filtered_mask = np.where(~np.isin(labeled_mask,largest_regions),0,labeled_mask)
+    filtered_mask [filtered_mask== np.unique(filtered_mask)[1]] = 1 # make sure you have only 0, 1 and 2
+    filtered_mask [filtered_mask== np.unique(filtered_mask)[2]] = 2
     filtered_regions = label(filtered_mask)
+    
     img = image_to_predict.transpose((1,2,0))
     props = regionprops(filtered_regions[:,:,0],img)
 
@@ -66,22 +67,40 @@ def find_intensity(image_dir,data):
     return image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic
 
 # Choose by image
-base_path = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic"
+base_path = os.getcwd()
 #data = pd.read_excel(base_path+'/pt_info.xlsx')
-#image_dir = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic\all_images\CRPS004_hand_3.tif" #CRPS007P3#CRPS004P1
+#image_dir = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic\all_images\CRPS007_foot_1.tif" #CRPS007P3#CRPS004P1
 
-#find_intensity(image_dir,data, show = True)
+#find_intensity(image_dir,data)
 
+
+class DraggableLabel(QLabel):
+    def __init__(self, title, parent):
+        super().__init__(title, parent)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasFormat("text/plain"):
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        print(event.mimeData().text())
+        pixmap = QPixmap(event.mimeData().text())
+        # Set the pixmap to the first QLabel
+        self.label1.setPixmap(pixmap.scaled(self.label1.size(), QtCore.Qt.KeepAspectRatio))
+        
 
 class MyWindow(QWidget):
     def __init__(self):
         super().__init__()
-
+        self.setWindowIcon(QIcon(r'"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Downloads\_c19b537e-b81f-4d8f-bc65-893fa21adb77.jfif"'))
         # Create main layout
         main_layout = QVBoxLayout()
 
         # Create QHBoxLayout for labels
-        hbox_layout = QHBoxLayout()
+        output_layout = QVBoxLayout()
         dataselection_lo = QHBoxLayout()
         imageselection_lo = QHBoxLayout()
         finalset_lo = QHBoxLayout()
@@ -101,39 +120,49 @@ class MyWindow(QWidget):
         self.sub_label.setAlignment(Qt.AlignCenter)  # Align text to the center
 
         self.label1 = QLabel()
-        #self.label2 = QLabel()
+        self.label1.setAcceptDrops(True)
+        self.label1.setFixedSize(400, 400)
+        self.label1.setStyleSheet("background-color: white;border-style: solid; border-width: 1px; border-color: black")
+
 
         # Styles
         style_allround = "border-radius: 5px; background-color: lightgrey"
         style_right_round = "border-bottom-right-radius: 10px; border-top-right-radius: 10px; background-color: lightgrey"
-        style_left_round = "border-bottom-left-radius: 10px; border-top-left-radius: 10px; border-color: black"
+        style_left_round = "border-bottom-left-radius: 10px; border-top-left-radius: 10px; border-style: solid; border-width: 1px; border-color: black;"
         
-        self.label1.setFixedSize(420, 400)
-        #self.label2.setFixedSize(420, 400)
-
+        
+        
         # Add QLabel objects to QHBoxLayout
-        hbox_layout.addWidget(self.label1)
-        #hbox_layout.addWidget(self.label2)
+        output_layout.addWidget(self.label1)
+        #output_layout.addWidget(self.label2)
         
         # Create data selection widgets
         self.data_path_line = QLineEdit()
         self.data_path_line.setFixedHeight(30)
+        self.data_path_line.setStyleSheet(style_left_round)
         databrowse_button = QPushButton("Load data frame")
         databrowse_button.setStyleSheet(style_right_round)
         databrowse_button.setFixedSize(100, 30)
-        self.data_path_line.setStyleSheet(style_left_round)
         dataselection_lo.addWidget(self.data_path_line)
         dataselection_lo.addWidget(databrowse_button)
 
         # Create image selection widgets
         self.image_path_line = QLineEdit()
+        self.image_path_line.setFixedHeight(30)
+        self.image_path_line.setStyleSheet(style_left_round)
         browse_button = QPushButton("Load Image")
+        browse_button.setStyleSheet(style_right_round)
+        browse_button.setFixedSize(100, 30)
         imageselection_lo.addWidget(self.image_path_line)
         imageselection_lo.addWidget(browse_button)
 
         # Final set of buttons
         segment_button = QPushButton("Segment")
         exit_button = QPushButton("Exit")
+        segment_button.setStyleSheet(style_allround)
+        exit_button.setStyleSheet(style_allround)
+        segment_button.setFixedHeight(30)
+        exit_button.setFixedHeight(30)
         finalset_lo.addWidget(segment_button)
         finalset_lo.addWidget(exit_button)
         
@@ -143,26 +172,53 @@ class MyWindow(QWidget):
         segment_button.clicked.connect(self.segment)
         exit_button.clicked.connect(self.close)
         
+        self.createTable()
+        output_layout.addWidget(self.tableWidget)
+
         # Add QHBoxLayout, button, and QLineEdit to QVBoxLayout
         main_layout.addWidget(self.title_label)
         main_layout.addWidget(self.sub_label)
-        main_layout.addLayout(hbox_layout)
+        main_layout.addLayout(output_layout)
         main_layout.addLayout(dataselection_lo)
         main_layout.addLayout(imageselection_lo)
         main_layout.addLayout(finalset_lo)
 
+        # Prepare the separator
+        #separator = QFrame()
+        #separator.setFrameShape(QFrame.VLine)
+        #separator.setStyleSheet('color: lightgrey; background-color: transparent')
+        #separator.setLineWidth(10)
+
+
         # Set the layout
         self.setLayout(main_layout)
+    
+    def editTable(self, content):
+        current_row_count = self.tableWidget.rowCount()
+        self.tableWidget.insertRow(current_row_count)
+        self.tableWidget.setItem(0, 0, QTableWidgetItem(str(np.round(content['ipsi'],1))))  
+        self.tableWidget.setItem(0, 1, QTableWidgetItem(str(np.round(content['contra'],1))))
+        self.tableWidget.setItem(0, 2, QTableWidgetItem(str(np.round(content['ratio'],2))))
+        
+    def createTable(self):
+        self.tableWidget = QTableWidget()
+        self.tableWidget.setRowCount(0)
+        self.tableWidget.setColumnCount(3) 
+        self.tableWidget.setHorizontalHeaderLabels(["Ipsi", "Contra","Ratio"])
+        
+        self.tableWidget.horizontalHeader().setStretchLastSection(True)  # Stretch the last section
+        self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Resize mode
+        
 
     def browse_data(self):
         options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Images (*.xlsx);;All Files (*)", options=options)
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select data frame", "", "Images (*.xlsx);;All Files (*)", options=options)
         if file_path:
             self.data_path_line.setText(file_path)
 
     def browse_image(self):
         options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Images (*.tif);;All Files (*)", options=options)
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select image", "", "Images (*.tif);;All Files (*)", options=options)
         if file_path:
             self.image_path_line.setText(file_path)
             self.load_image()
@@ -175,7 +231,6 @@ class MyWindow(QWidget):
 
     def segment(self):
         data = pd.read_excel(self.data_path_line.text())
-        print(data)
         image_dir = self.image_path_line.text()
         if os.path.exists(image_dir):
             image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,data)
@@ -196,7 +251,7 @@ class MyWindow(QWidget):
             
             pixmap_regions = QPixmap(base_path+"/temp_file.png")
             self.label1.setPixmap(pixmap_regions.scaled(self.label1.size(), QtCore.Qt.KeepAspectRatio))
-
+            self.editTable(intensity_dic)
     def fig_to_pixmap(self, fig):
         """Convert matplotlib figure to QPixmap."""
         # Render the figure to a QImage
@@ -214,50 +269,3 @@ if __name__ == "__main__":
     window.show()
     sys.exit(app.exec_())
 
-
-
-
-
-
-
-
-
-####################################
-# Old code to find clusters of points
-
-image_to_predict = tiff.imread(image_dir).transpose(2, 0, 1)
-predicted_mask, uncertainty = seg.predict_image(image_to_predict, ['hand'], show=True)
-predicted_mask[:,150:250,:] = 0
-
-X,Y = np.where(predicted_mask[:,:,0]==255)
-
-Z = np.column_stack((X,Y)).astype(np.float32)
-
-# define criteria, number of clusters(K) and apply kmeans()
-criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-K = 2
-ret,labels,center=cv2.kmeans(Z,K,None,criteria,10,cv2.KMEANS_RANDOM_CENTERS)
-color = labels.copy().astype(str).reshape(-1)
-color[color=='0'] = 'indianred'
-color[color=='1'] = 'steelblue'
-plt.scatter(Y,predicted_mask.shape[0]-X,color = color)
-
-# Mark and display cluster centres 
-plt.imshow(predicted_mask)
-plt.plot(center[0,1],center[0,0],'o')
-plt.plot(center[1,1],center[1,0],'o')
-for x,y in center:
-    print(f'Cluster centre: [{int(x)},{int(y)}]')
-    cv2.drawMarker(predicted_mask, (int(x), int(y)), [0,50,255])
-
-
-contours, hierarchy = cv2.findContours(predicted_mask,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-
-hulls = []
-for contour in contours:
-    contour = contour.reshape(contour.shape[0],contour.shape[2])
-    if contour.shape[0]>2:
-        hulls.append(ConvexHull(contour))
-
-hulls[0].vertices
-len(contours)

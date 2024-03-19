@@ -4,3 +4,9 @@ wandb
 
 *.json
 /cache/
+*.pth
+/output
+pt_info.xlsx
+segmagic_test.spec
+temp_file.png
+Thumbs.db
