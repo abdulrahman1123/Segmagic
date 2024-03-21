@@ -1,19 +1,24 @@
-from segmagic_ml import Segmagic
+from segmagic_ml_small import Segmagic
 from tifffile import imread
 import numpy as np
-import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
-
-import pandas as pd
-import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QButtonGroup, QRadioButton,QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView, QGridLayout,QLayout,QFrame
-from PyQt5.QtGui import QPixmap,QFont,QImage,QIcon
-from PyQt5 import QtCore
-from PyQt5.QtCore import Qt
-import os
 import glob
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
-def find_intensity(image_dir,side_info, id, model_type):
+import os
+import sys
+from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QButtonGroup,
+                             QRadioButton,QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView,
+                             QGridLayout,QDesktopWidget,QFrame,QSizePolicy)
+from PyQt5.QtGui import QPixmap,QFont,QImage,QIcon,QPainter
+from PyQt5 import QtCore, QtSvg
+from PyQt5.QtCore import Qt,QSize
+
+
+def find_intensity(image_dir,side_info, model_type):
     """
     Find segments of ipsilateral and contralateral sides and calculate the intensity inside each region.
     :param image_dir: directory of the image to be segmented
@@ -29,7 +34,7 @@ def find_intensity(image_dir,side_info, id, model_type):
 
     # predict mask
     image_to_predict = imread(image_dir).transpose(2, 0, 1)
-    predicted_mask, uncertainty = seg.predict_image(image_to_predict, labels, show=True)
+    predicted_mask, uncertainty = seg.predict_image(image_to_predict, labels, show=False)
     labeled_mask = label(predicted_mask)
     region_inds, region_count = np.unique(labeled_mask, return_counts=True)
     n_masks = len(np.where(region_count>1500)[0])-1
@@ -38,7 +43,7 @@ def find_intensity(image_dir,side_info, id, model_type):
     if n_masks==1:
         print("\nOne big region was found. Splitting using a vertical line\n")
         image_to_predict[:,:,190:210] = 255
-        predicted_mask, uncertainty = seg.predict_image(image_to_predict, labels, show=True)
+        predicted_mask, uncertainty = seg.predict_image(image_to_predict, labels, show=False)
         labeled_mask, n_masks = label(predicted_mask, return_num=True)
     # Extract largest regions
     region_inds, region_count = np.unique(labeled_mask, return_counts=True)
@@ -65,7 +70,8 @@ def find_intensity(image_dir,side_info, id, model_type):
     if len(intensity_dic.keys()) ==1:
         print ("Segmentation Failed")
         return None, None, None, None, None
-    intensity_dic['ratio'] = intensity_dic['ipsi']/intensity_dic['contra']
+    intensity_dic['ratio'] = intensity_dic['ipsi'] / intensity_dic['contra']
+    intensity_dic['id'] = image_dir.replace(".tif","").split("/")[-1].split("\\")[-1]
 
     return image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic
 
@@ -74,7 +80,7 @@ base_path = os.getcwd()
 #data = pd.read_excel(base_path+'/pt_info.xlsx')
 #image_dir = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic\all_images\CRPS007_foot_1.tif" #CRPS007P3#CRPS004P1
 
-#find_intensity(image_dir,data,id, model_type)
+#find_intensity(image_dir,data, model_type)
 
 def clear_layout(layout):
     for i in reversed(range(layout.count())):
@@ -91,18 +97,23 @@ def clear_layout(layout):
 class MyWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowIcon(QIcon(r'"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Downloads\_c19b537e-b81f-4d8f-bc65-893fa21adb77.jfif"'))
-        
-        self.mode = 'single'
+
+        # change window size depending on screen size
+        sc_width = QDesktopWidget().screenGeometry(-1).width()
+        self.MF = 1#0.75*sc_width/1920 # magnification factor
+        self.MFF = 1#0.6*sc_width/1920 # magnification factor for fonts
 
         # Create main layout
-        self.main_layout = QVBoxLayout()
+        self.main_layout = QHBoxLayout()
 
-        # Create QHBoxLayout for labels
+        self.left_layout = QVBoxLayout()
         self.output_layout = QVBoxLayout()
         self.dataselection_lo = QHBoxLayout()
+        self.image_info_lo = QHBoxLayout()
         self.title_lo = QHBoxLayout()
         self.imageselection_lo = QHBoxLayout()
+        self.folder_tootlip_lo = QHBoxLayout()
+        self.folderselection_lo = QGridLayout()
         self.finalset_lo = QHBoxLayout()
         self.aff_side_lo = QGridLayout()
         self.handfoot_lo = QGridLayout()
@@ -111,38 +122,55 @@ class MyWindow(QWidget):
         
         self.title_label = QLabel("ScintiSeg", self)
         self.title_label.setWordWrap(True)
-        self.title_label.setFont(QFont("Calibri", 20))
+        self.title_label.setFont(QFont("Calibri", int(20*self.MFF)))
         self.title_label.setAlignment(Qt.AlignCenter)
 
-        pixmap = QPixmap(base_path+"/logo.png")
-        self.logo_label = QLabel()
-        self.logo_label.setFixedSize(75, 75)
-        self.logo_label.setPixmap(pixmap.scaled(self.logo_label.size(), QtCore.Qt.KeepAspectRatio))
+        renderer = QPixmap(base_path+"/logo.png")
+        logo_label = QLabel()
+        logo_label.setFixedSize(int(75 * self.MF), int(75 * self.MF))
+        logo_label.setPixmap(renderer.scaled(logo_label.size(), QtCore.Qt.KeepAspectRatio))
+
+        single_img_label = QLabel("Segmenting a Single Image")
+        single_img_label.setFont(QFont("Calibri", int(18 * self.MFF)))
+
+        folder_seg_label = QLabel("Segmenting Images in a Folder")
+        folder_seg_label.setFont(QFont("Calibri", int(18 * self.MFF)))
+
+        folder_seg_label_add = QLabel("(Hover over the question mark for more info)")
+        folder_seg_label_add.setFont(QFont("Calibri", int(14 * self.MFF)))
+        folder_seg_label_add.setWordWrap(True)
+
+        tooltip_icon = QPixmap(base_path+"/question.png")
+        tooltip_label = QLabel()
+        tooltip_label.setFixedSize(int(80 * self.MF), int(40 * self.MF))
+        tooltip_label.setPixmap(tooltip_icon.scaled(tooltip_label.size(), QtCore.Qt.KeepAspectRatio))
+        tip = ("Choose a data set (excel file)\nIt should have three columns (ID, Side and Extremity), containing\ninformation about the images to be segmented.\nThe image naming should follow the following scheme:\n<subID_scintiPhase>.tif (e.g. CRPS006_P3.tif)")
+        tooltip_label.setToolTip(f'<img src="{base_path+"/tooltip.png"}">')
+        #tooltip_label.setToolTipDuration(5000)
 
         # TODO: make the label droppable
-        self.label1 = QLabel("Drag and drop an image here, or use the button below")
+        self.label1 = QLabel("For single-image analysis:\nEither drag and drop an image here,\nor use the 'Choose Image' button, and\npress 'Segment Image'")
         #self.label1.setAcceptDrops(True)
-        self.label1.setFixedSize(350, 350)
+        self.label1.setFixedSize(int(400*self.MF), int(400*self.MF))
         self.label1.setStyleSheet("background-color: white;border-style: solid; border-width: 1px; border-color: black")
 
 
         # Styles
         style_allround = "border-radius: 5px; background-color: lightgrey"
-        style_right_round = "border-bottom-right-radius: 10px; border-top-right-radius: 10px; background-color: lightgrey"
-        style_left_round = "border-bottom-left-radius: 10px; border-top-left-radius: 10px; border-style: solid; border-width: 1px; border-color: black;"
+        style_right_round = "border-bottom-right-radius: 10px; border-top-right-radius: 10px; border-style: solid; border-width: 1px; border-color: black"
+        style_left_round = "border-bottom-left-radius: 10px; border-top-left-radius: 10px; background-color: lightgrey;"
         
         # Create data selection widgets
         self.data_path_line = QLineEdit()
-        self.data_path_line.setFixedHeight(30)
-        self.data_path_line.setStyleSheet(style_left_round)
-        self.databrowse_button = QPushButton("Load data frame")
-        self.databrowse_button.setStyleSheet(style_right_round)
-        self.databrowse_button.setFixedSize(100, 30)
+        self.data_path_line.setFixedHeight(int(44*self.MF))
+        self.data_path_line.setStyleSheet(style_right_round)
+        self.databrowse_button = QPushButton("Choose Data")
+        self.databrowse_button.setStyleSheet(style_left_round)
+        self.databrowse_button.setFixedSize(int(100*self.MF), int(44*self.MF))
         
         # For single-image mode, create radiobuttons and labels
-        font_sub = QFont("Calibri", 12)
+        font_sub = QFont("Calibri", int(12*self.MFF))
 
-        data_font = QFont("Calibri", 12)
         self.aff_side_label = QLabel("Affected side")
         self.aff_side_left = QRadioButton("Left")
         self.aff_side_left.setChecked(True)
@@ -183,12 +211,18 @@ class MyWindow(QWidget):
         self.spacer_label = QLabel("   ")
 
         # Create image selection widgets
-        self.path_line = QLineEdit()
-        self.path_line.setFixedHeight(30)
-        self.path_line.setStyleSheet(style_left_round)
-        self.folderbrowse_button = QPushButton("Open Folder")
-        self.folderbrowse_button.setStyleSheet(style_right_round)
-        self.folderbrowse_button.setFixedSize(100, 30)
+        self.img_path_line = QLineEdit()
+        self.img_path_line.setFixedHeight(int(44*self.MF))
+        self.img_path_line.setStyleSheet(style_right_round)
+        
+        self.folder_path_line = QLineEdit()
+        self.folder_path_line.setFixedHeight(int(44*self.MF))
+        self.folder_path_line.setStyleSheet(style_right_round)
+
+        
+        self.folderbrowse_button = QPushButton("Choose Folder")
+        self.folderbrowse_button.setStyleSheet(style_left_round)
+        self.folderbrowse_button.setFixedSize(int(100*self.MF), int(44*self.MF))
         
         
         # Final set of buttons
@@ -201,22 +235,22 @@ class MyWindow(QWidget):
         self.segment_img_button = QPushButton()
         self.segment_img_button.setStyleSheet(style_allround)
         self.segment_img_button.setIcon(QIcon(segment_image_dir))
-        self.segment_img_button.setIconSize(QtCore.QSize(100,40))
-        self.segment_img_button.setFixedHeight(44)
+        self.segment_img_button.setIconSize(QtCore.QSize(int(100*self.MF),int(40*self.MF)))
+        self.segment_img_button.setFixedHeight(int(44*self.MF))
 
         
 
         self.single_button = QPushButton()
         self.single_button.setStyleSheet(style_allround)
-        self.single_button.setFixedHeight(44)
+        self.single_button.setFixedHeight(int(44*self.MF))
         self.single_button.setIcon(QIcon(single_image_dir))
-        self.single_button.setIconSize(QtCore.QSize(100,40))
+        self.single_button.setIconSize(QtCore.QSize(int(100*self.MF),int(40*self.MF)))
 
         self.multiple_button = QPushButton()
         self.multiple_button.setStyleSheet(style_allround)
-        self.multiple_button.setFixedHeight(44)
+        self.multiple_button.setFixedHeight(int(44*self.MF))
         self.multiple_button.setIcon(QIcon(multiple_images_dir))
-        self.multiple_button.setIconSize(QtCore.QSize(100,40))
+        self.multiple_button.setIconSize(QtCore.QSize(int(100*self.MF),int(40*self.MF)))
 
 
         self.exit_button = QPushButton("")
@@ -227,14 +261,14 @@ class MyWindow(QWidget):
         
 
         # Now the single-image-exclusive layout
-        self.imagebrowse_button = QPushButton("Open Image")
-        self.imagebrowse_button.setStyleSheet(style_right_round)
-        self.imagebrowse_button.setFixedSize(100, 30)
+        self.imagebrowse_button = QPushButton("Choose Image")
+        self.imagebrowse_button.setStyleSheet(style_left_round)
+        self.imagebrowse_button.setFixedSize(int(100*self.MF), int(44*self.MF))
         self.segment_folder_button = QPushButton("")
         self.segment_folder_button.setStyleSheet(style_allround)
         self.segment_folder_button.setIcon(QIcon(segment_folder_dir))
-        self.segment_folder_button.setIconSize(QtCore.QSize(100,40))
-        self.segment_folder_button.setFixedHeight(44)
+        self.segment_folder_button.setIconSize(QtCore.QSize(int(100*self.MF),int(40*self.MF)))
+        self.segment_folder_button.setFixedHeight(int(88*self.MF))
 
 
         # Connect button click event to function
@@ -244,29 +278,10 @@ class MyWindow(QWidget):
         self.segment_img_button.clicked.connect(self.segment_image)
         self.segment_folder_button.clicked.connect(self.segment_folder)
         self.exit_button.clicked.connect(self.close)
-        self.single_button.clicked.connect(self.build_single_lo)
-        self.multiple_button.clicked.connect(self.build_multiple_lo)
         
-        self.mode = 'single'
-        self.createTable(mode = self.mode)
+        self.createTable()
         
         # Build the layouts
-        
-        if self.mode == 'single':
-            self.build_single_lo()
-        elif self.mode == 'multiple':
-            self.build_multiple_lo()
-        else:
-            print("The layout mode should be either 'single' or 'multiple'")
-
-        """
-        central_widget = QWidget()
-        central_widget.setLayout(self.main_layout)
-        self.setCentralWidget(central_widget)"""
-    
-    def build_single_lo(self):
-        clear_layout(self.main_layout)
-        #self.clearLayout(self.main_layout)
         self.aff_side_lo.addWidget(self.aff_side_label,0,0,1,2)
         self.aff_side_lo.addWidget(self.aff_side_left,1,0,1,1)
         self.aff_side_lo.addWidget(self.aff_side_right,1,1,1,1)
@@ -280,57 +295,94 @@ class MyWindow(QWidget):
         self.sciphase_lo.addWidget(self.sciphase_3,1,1,1,1)
         
 
-
-
-        self.mode = 'single'
-        self.createTable(mode = self.mode)
-
-        # Prepare the separator
+        # Prepare the vertical separator
         self.separator = QFrame()
         self.separator.setFrameShape(QFrame.VLine)
         self.separator.setStyleSheet('color: lightgrey; background-color: transparent')
-        self.separator.setLineWidth(10)
+        self.separator.setLineWidth(int(10*self.MF))
+
+        # prepare the horizontal separator
+        Separador1 = QFrame()
+        Separador1.setFrameShape(QFrame.HLine)  # Set the shape to horizontal line
+        Separador1.setStyleSheet('color: lightgrey')
+        Separador1.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
+        Separador1.setLineWidth(int(1 * self.MF))
+
+        Separador2 = QFrame()
+        Separador2.setFrameShape(QFrame.HLine)  # Set the shape to horizontal line
+        Separador2.setStyleSheet('color: lightgrey')
+        Separador2.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
+        Separador2.setLineWidth(int(1 * self.MF))
 
         # Add all widgets to thier respective layouts
         self.output_layout.addWidget(self.label1)
         self.output_layout.addWidget(self.tableWidget)
-        self.dataselection_lo.addLayout(self.aff_side_lo)
-        self.dataselection_lo.addWidget(self.spacer_label)
-        self.dataselection_lo.addLayout(self.handfoot_lo)
-        self.dataselection_lo.addWidget(self.spacer_label)
-        self.dataselection_lo.addLayout(self.sciphase_lo)
-        self.imageselection_lo.addWidget(self.path_line)
+
+        self.image_info_lo.addLayout(self.aff_side_lo)
+        self.image_info_lo.addWidget(self.spacer_label)
+        self.image_info_lo.addLayout(self.handfoot_lo)
+        self.image_info_lo.addWidget(self.spacer_label)
+        self.image_info_lo.addLayout(self.sciphase_lo)
+        
+
         self.imageselection_lo.addWidget(self.imagebrowse_button)
-        self.finalset_lo.addWidget(self.segment_img_button)
-        self.finalset_lo.addWidget(self.multiple_button)
+        self.imageselection_lo.addWidget(self.img_path_line)
+        self.imageselection_lo.addWidget(self.spacer_label)
+        self.imageselection_lo.addWidget(self.segment_img_button)
+        self.imageselection_lo.setSpacing(0)
+
+        self.folderselection_lo.addWidget(self.segment_folder_button,0,5,2,1)
+        self.folderselection_lo.addWidget(self.folderbrowse_button,0,0,1,1)
+        self.folderselection_lo.addWidget(self.folder_path_line,0,1,1,3)
+        self.folderselection_lo.addWidget(self.spacer_label,0,4,1,1)
+        self.folderselection_lo.addWidget(self.databrowse_button,1,0,1,1)
+        self.folderselection_lo.addWidget(self.data_path_line,1,1,1,3)
+        self.folderselection_lo.setHorizontalSpacing(0)
+
+        self.finalset_lo.addWidget(self.spacer_label)
+        self.finalset_lo.addWidget(self.spacer_label)
         self.finalset_lo.addWidget(self.exit_button)
-        self.title_lo.addWidget(self.logo_label)
+        
+        self.title_lo.addWidget(logo_label)
         self.title_lo.addWidget(self.title_label)
 
-        # Add all Layouts to the main one
-        self.main_layout.addLayout(self.title_lo)
-        self.main_layout.addLayout(self.output_layout)
-        self.main_layout.addLayout(self.dataselection_lo)
-        self.main_layout.addLayout(self.imageselection_lo)
-        self.main_layout.addLayout(self.finalset_lo)
+        self.folder_tootlip_lo.addWidget(folder_seg_label)
+        self.folder_tootlip_lo.addWidget(tooltip_label)
+        #self.folder_tootlip_lo.addWidget(self.separator)
 
+        # Add all Layouts to the main one
+        self.left_layout.addLayout(self.title_lo)
+        self.left_layout.addWidget(Separador1)
+        self.left_layout.addWidget(single_img_label)
+        self.left_layout.addLayout(self.image_info_lo)
+        self.left_layout.addLayout(self.imageselection_lo)
+        self.left_layout.addWidget(Separador2)
+        #self.left_layout.addWidget(folder_seg_label)
+        self.left_layout.addLayout(self.folder_tootlip_lo)
+        self.left_layout.addLayout(self.dataselection_lo)
+        self.left_layout.addLayout(self.folderselection_lo)
+        self.left_layout.addLayout(self.finalset_lo)
+        
+        self.main_layout.addLayout(self.left_layout)
+        self.main_layout.addLayout(self.output_layout)
+        
         # Set the layout
         self.setLayout(self.main_layout)        
         for i in range(self.main_layout.count()):
             item = self.main_layout.itemAt(i)
             #print(item)
-            
+
     def build_multiple_lo(self):
+        # OLD FUNCTION ... IGNORE
         clear_layout(self.main_layout)
         #self.title_label.setText("ScintiSig")
-        self.mode = 'multiple'
-        self.createTable(mode = self.mode)
+        self.createTable()
 
         # Add all widgets to thier respective layouts
         self.output_layout.addWidget(self.tableWidget)
         self.dataselection_lo.addWidget(self.data_path_line)
         self.dataselection_lo.addWidget(self.databrowse_button)
-        self.imageselection_lo.addWidget(self.path_line)
+        self.imageselection_lo.addWidget(self.img_path_line)
         self.imageselection_lo.addWidget(self.folderbrowse_button)
         self.finalset_lo.addWidget(self.segment_folder_button)
         self.finalset_lo.addWidget(self.single_button)
@@ -361,34 +413,24 @@ class MyWindow(QWidget):
         ratio = QTableWidgetItem(str(np.round(content['ratio'],1)))
         ratio.setTextAlignment(Qt.AlignCenter)
 
-        if self.mode=='multiple':
-            id = QTableWidgetItem(str(np.round(content['id'],1)))
-            id.setTextAlignment(Qt.AlignCenter)
-            self.tableWidget.setItem(current_row_count, 0, id)
-            self.tableWidget.setItem(current_row_count, 1, ipsi)
-            self.tableWidget.setItem(current_row_count, 2, contra)
-            self.tableWidget.setItem(current_row_count, 3, ratio)
-        else:
-            self.tableWidget.setItem(current_row_count, 0, ipsi)
-            self.tableWidget.setItem(current_row_count, 1, contra)
-            self.tableWidget.setItem(current_row_count, 2, ratio)
-
+        id = QTableWidgetItem(content['id'])
+        id.setTextAlignment(Qt.AlignCenter)
+        self.tableWidget.setItem(current_row_count, 0, id)
+        self.tableWidget.setItem(current_row_count, 1, ipsi)
+        self.tableWidget.setItem(current_row_count, 2, contra)
+        self.tableWidget.setItem(current_row_count, 3, ratio)
+  
         
-    def createTable(self, mode='single'):
+    def createTable(self):
         self.tableWidget = QTableWidget()
-
-        if mode == 'single':
-            self.tableWidget.setRowCount(0)
-            self.tableWidget.setColumnCount(3) 
-            self.tableWidget.setHorizontalHeaderLabels(["Ipsi", "Contra","Ratio"])
-            self.tableWidget.setFixedHeight(60)
-        else:
-            self.tableWidget.setRowCount(0)
-            self.tableWidget.setColumnCount(4) 
-            self.tableWidget.setHorizontalHeaderLabels(["ID","Ipsi", "Contra","Ratio"])
-            self.tableWidget.setFixedHeight(450)
-        self.tableWidget.horizontalHeader().setStretchLastSection(True)  # Stretch the last section
+        self.tableWidget.setRowCount(0)
+        self.tableWidget.setColumnCount(4) 
+        self.tableWidget.setHorizontalHeaderLabels(["ID","Ipsi", "Contra","Ratio"])
+        self.tableWidget.setMinimumHeight(int(200*self.MF))
+        #self.tableWidget.horizontalHeader().setStretchLastSection(True)  # Stretch the last section
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Resize mode
+        
+        #self.tableWidget.resizeColumnsToContents()
 
         
 
@@ -401,36 +443,60 @@ class MyWindow(QWidget):
     def browse_folder(self):
         folder_path = QFileDialog.getExistingDirectory(None, "Select Images Folder")
         if folder_path:
-            self.path_line.setText(folder_path)
+            self.folder_path_line.setText(folder_path)
 
     def browse_image(self):
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getOpenFileName(self, "Select image", "", "Images (*.tif);;All Files (*)", options=options)
         if file_path:
-            self.path_line.setText(file_path)
+            self.img_path_line.setText(file_path)
             self.load_image()
 
     def load_image(self):
-        image_path = self.path_line.text()
+        image_path = self.img_path_line.text()
         pixmap = QPixmap(image_path)
         # Set the pixmap to the first QLabel
         self.label1.setPixmap(pixmap.scaled(self.label1.size(), QtCore.Qt.KeepAspectRatio))
 
     def segment_folder(self):
         data = pd.read_excel(self.data_path_line.text())
-        files_dir = glob.glob(self.path_line.text()+"/*")
+        files_dir = glob.glob(self.folder_path_line.text()+"/*")
         print(files_dir)
-        for image_dir in files_dir:
-            if os.path.exists(image_dir):
-                id,model_type,phase = image_dir.replace(".tif","").split("/")[-1].split("\\")[-1].split("_")
-                
-                model_type = 'hand_p3'if model_type+phase == 'hand3' else model_type
-                side_info = data.loc[data['ID']==id,'affected_extremity'].values[0].lower()
-                image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info,id, model_type)
-                self.editTable(intensity_dic)
+        if len(files_dir)>0:
+            for image_dir in files_dir:
+                if os.path.exists(image_dir):
+                    id,phase = image_dir.replace(".tif","").split("/")[-1].split("\\")[-1].split("_")
+                    extremity = data.loc[data['ID']==id,'Extremity'].values[0].lower()
+                    model_type = 'hand' if 'up' in extremity else 'foot'
 
+                    # hand_p3 is a special model for the hands
+                    model_type = 'hand_p3'if model_type+phase == 'hand3' else model_type
+                    side_info = data.loc[data['ID']==id,'Side'].values[0].lower()
+                    image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info, model_type)
+                    self.editTable(intensity_dic)
+
+            # plot the last image only
+            color_list = ['steelblue', 'indianred', 'olivedrab', 'darkgoldenrod', 'darkmagenta', 'grey', 'palevioletred',
+                          'sienna', 'beige', 'coral']
+
+            cmap = plt.cm.colors.ListedColormap(['white'] + color_list[0:len(centroids)])
+            plt.close()
+            fig = plt.subplots(figsize=(5, 5))
+            plt.imshow(image_to_predict[0, :, :], cmap='gray')
+            plt.imshow(filtered_mask, cmap=cmap, interpolation='nearest', alpha=0.3)
+            # Add text
+            for centroid, l_text in zip(centroids, region_afctd_extr):
+                plt.text(centroid[1], centroid[0], l_text, ha='center', font='Calibri', size=20)
+
+            plt.axis('off')
+            plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
+            plt.savefig(base_path + "/temp_file.png")
+            plt.close()
+            pixmap_regions = QPixmap(base_path + "/temp_file.png")
+            self.label1.setPixmap(pixmap_regions.scaled(self.label1.size(), QtCore.Qt.KeepAspectRatio))
     def segment_image(self):
-        image_dir = self.path_line.text()
+        image_dir = self.img_path_line.text()
         if os.path.exists(image_dir):
             side_info = "left" if self.aff_side_left.isChecked() else "right"
             model_type = "hand" if self.handfoot_hand.isChecked() else "foot"
@@ -438,11 +504,12 @@ class MyWindow(QWidget):
             id = image_dir.replace(".tif","").split("/")[-1].split("\\")[-1]
             
             model_type = 'hand_p3'if model_type+phase == 'hand3' else model_type
-            image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info,id, model_type)
+            image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info, model_type)
             color_list = ['steelblue', 'indianred','olivedrab','darkgoldenrod','darkmagenta','grey','palevioletred','sienna','beige','coral']
 
-            fig = plt.subplots(figsize = (5,5))
             cmap = plt.cm.colors.ListedColormap(['white']+color_list[0:len(centroids)])
+            plt.close()
+            fig = plt.subplots(figsize = (5,5))
             plt.imshow(image_to_predict[0,:,:],cmap='gray')
             plt.imshow(filtered_mask, cmap=cmap, interpolation='nearest', alpha = 0.3)
             # Add text
@@ -453,7 +520,7 @@ class MyWindow(QWidget):
             plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
             
             plt.savefig(base_path+"/temp_file.png")
-            
+            plt.close()
             pixmap_regions = QPixmap(base_path+"/temp_file.png")
             self.label1.setPixmap(pixmap_regions.scaled(self.label1.size(), QtCore.Qt.KeepAspectRatio))
             self.editTable(intensity_dic)

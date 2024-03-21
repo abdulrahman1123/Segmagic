@@ -5,12 +5,8 @@ from tqdm.auto import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 import glob
-import tifffile as tiff
 import os
-import cv2 
-from shapely.geometry import Polygon,mapping
-import geojson
-import pandas as pd
+
         
 
 class Segmagic():
@@ -179,75 +175,5 @@ class Segmagic():
 
         return predicted_mask, uncertainty
     
-    def get_dice(self, img1, img2):
-        img1 = np.asarray(img1).astype(bool)
-        img2 = np.asarray(img2).astype(bool)
-        intersection = np.logical_and(img1, img2)
-        return 2. * intersection.sum() / (img1.sum() + img2.sum())
-      
-    def predict_folder(self, folder_path, labels, show=False):
-        folder_saveto = folder_path + '_pred/masks'
-        folder_saveto_json = folder_path + '_pred/jsons'
-        folder_saveto_uncertainty = folder_path + '_pred/uncertainty'
-        try:
-            os.mkdir(folder_path + '_pred')
-            os.mkdir(folder_saveto)
-            os.mkdir(folder_saveto_json)
-            os.mkdir(folder_saveto_uncertainty)
-        except:
-            pass
-        filepaths = glob.glob(f"{folder_path}/*.tif")
-
-        for filepath in tqdm(filepaths):
-            filename = os.path.basename(filepath)
-            print(filename)
-
-            image_to_predict = tiff.imread(filepath)
-            image_to_predict = image_to_predict.transpose(2, 0, 1)
-
-            predicted_mask, uncertainty = self.predict_image(image_to_predict, labels, show=show)
-            tiff.imwrite(f"{folder_saveto}/{filename}", predicted_mask, metadata={'labels': labels})
-            tiff.imwrite(f"{folder_saveto_uncertainty}/{filename}", np.uint8(uncertainty*255), metadata={'labels': labels})
-
-            self.save_geojson(predicted_mask, labels, f"{folder_saveto_json}/{filename}")
 
     
-    def save_geojson(self, predicted_mask, labels, saveto):
-        features = []
-
-        for e, label in enumerate(labels):
-            
-            mask = predicted_mask[..., e]
-            contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-            if hierarchy is not None:
-                blob_idx = np.squeeze(np.where(hierarchy[0, :, 3] == -1))
-
-                polys = []
-                
-                for b_idx in np.nditer(blob_idx):
-                    this_poly = contours[b_idx]
-                    this_poly = np.array(this_poly).squeeze(1)
-                    holes = []
-
-                    cnt_idx = np.squeeze(np.where(hierarchy[0, :, 3] == b_idx))
-                    if cnt_idx.size > 0:
-                        holes += [np.array(contours[c]).squeeze(1) for c in np.nditer(cnt_idx)]
-
-                    if len(this_poly) > 5:
-                        polys.append(Polygon(this_poly, holes=holes))
-                
-                # maybe limit popygon size here
-                #polys = [p for p in polys if p.area > 200]
-                #polys = [p for p in polys if p.area < 100000]
-
-                features += [{
-                    'type': 'Feature', 
-                    'properties': {"classification": {"colorRGB": -2315298, "name": f"p_{label}"}, "isLocked": False, "measurements": []}, 
-                    'id': 'PathAnnotationObject', 
-                    'geometry': mapping(p)} 
-                    for p in polys]
-                        
-        with open(f'{saveto}.geojson', 'w') as outfile:
-            geojson.dump(features, outfile)
-        
