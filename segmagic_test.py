@@ -512,8 +512,9 @@ class MyWindow(QWidget):
             plt.imshow(image_to_predict[0, :, :], cmap='gray')
             plt.imshow(filtered_mask, cmap=cmap, interpolation='nearest', alpha=0.3)
             # Add text
-            for centroid, l_text in zip(centroids, region_afctd_extr):
-                plt.text(centroid[1], centroid[0], l_text, ha='center', font='Calibri', size=20)
+            #TODO: fix text here as well
+            #for centroid, l_text in zip(centroids, region_afctd_extr):
+            #    plt.text(centroid[1], centroid[0], l_text, ha='center', font='Calibri', size=20)
 
             plt.axis('off')
             plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
@@ -538,8 +539,10 @@ class MyWindow(QWidget):
             plt.close()
             fig = plt.subplots(figsize = (5,5))
             plt.imshow(image_to_predict[0,:,:],cmap='gray')
+            # TODO: Make sure that ipsi is red and contra is blue
             plt.imshow(filtered_mask, cmap=cmap, interpolation='nearest', alpha = 0.3)
             # Add text
+            # TODO: Write text for ipsi and contra
             #for centroid,l_text in zip(centroids,region_afctd_extr):
             #    plt.text(centroid[1],centroid[0],l_text, ha='center', font = 'Calibri', size = 20)
 
