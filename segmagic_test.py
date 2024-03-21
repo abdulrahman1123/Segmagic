@@ -410,7 +410,7 @@ class MyWindow(QWidget):
         ipsi.setTextAlignment(Qt.AlignCenter)
         contra = QTableWidgetItem(str(np.round(content['contra'],1)))
         contra.setTextAlignment(Qt.AlignCenter)
-        ratio = QTableWidgetItem(str(np.round(content['ratio'],1)))
+        ratio = QTableWidgetItem(str(np.round(content['ratio'],2)))
         ratio.setTextAlignment(Qt.AlignCenter)
 
         id = QTableWidgetItem(content['id'])
