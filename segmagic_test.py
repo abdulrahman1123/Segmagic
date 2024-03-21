@@ -100,8 +100,9 @@ class MyWindow(QWidget):
 
         # change window size depending on screen size
         sc_width = QDesktopWidget().screenGeometry(-1).width()
-        self.MF = 1#0.75*sc_width/1920 # magnification factor
-        self.MFF = 1#0.6*sc_width/1920 # magnification factor for fonts
+        self.MF  = 0.75*sc_width/1920 # magnification factor
+        print(self.MF)
+        self.MFF =0.6*sc_width/1920 # magnification factor for fonts
 
         # Create main layout
         self.main_layout = QHBoxLayout()
@@ -122,7 +123,7 @@ class MyWindow(QWidget):
         
         self.title_label = QLabel("ScintiSeg", self)
         self.title_label.setWordWrap(True)
-        self.title_label.setFont(QFont("Calibri", int(20*self.MFF)))
+        self.title_label.setFont(QFont("Calibri", int(18*self.MFF)))
         self.title_label.setAlignment(Qt.AlignCenter)
 
         renderer = QPixmap(base_path+"/logo.png")
@@ -131,13 +132,13 @@ class MyWindow(QWidget):
         logo_label.setPixmap(renderer.scaled(logo_label.size(), QtCore.Qt.KeepAspectRatio))
 
         single_img_label = QLabel("Segmenting a Single Image")
-        single_img_label.setFont(QFont("Calibri", int(18 * self.MFF)))
+        single_img_label.setFont(QFont("Calibri", int(16 * self.MFF)))
 
         folder_seg_label = QLabel("Segmenting Images in a Folder")
-        folder_seg_label.setFont(QFont("Calibri", int(18 * self.MFF)))
+        folder_seg_label.setFont(QFont("Calibri", int(16 * self.MFF)))
 
         folder_seg_label_add = QLabel("(Hover over the question mark for more info)")
-        folder_seg_label_add.setFont(QFont("Calibri", int(14 * self.MFF)))
+        folder_seg_label_add.setFont(QFont("Calibri", int(13 * self.MFF)))
         folder_seg_label_add.setWordWrap(True)
 
         tooltip_icon = QPixmap(base_path+"/question.png")
@@ -151,7 +152,7 @@ class MyWindow(QWidget):
         # TODO: make the label droppable
         self.label1 = QLabel("For single-image analysis:\nEither drag and drop an image here,\nor use the 'Choose Image' button, and\npress 'Segment Image'")
         #self.label1.setAcceptDrops(True)
-        self.label1.setFixedSize(int(400*self.MF), int(400*self.MF))
+        self.label1.setFixedSize(int(450*self.MF), int(450*self.MF))
         self.label1.setStyleSheet("background-color: white;border-style: solid; border-width: 1px; border-color: black")
 
 
@@ -166,10 +167,10 @@ class MyWindow(QWidget):
         self.data_path_line.setStyleSheet(style_right_round)
         self.databrowse_button = QPushButton("Choose Data")
         self.databrowse_button.setStyleSheet(style_left_round)
-        self.databrowse_button.setFixedSize(int(100*self.MF), int(44*self.MF))
+        self.databrowse_button.setFixedSize(int(130*self.MF), int(44*self.MF))
         
         # For single-image mode, create radiobuttons and labels
-        font_sub = QFont("Calibri", int(12*self.MFF))
+        font_sub = QFont("Calibri", int(11*self.MFF))
 
         self.aff_side_label = QLabel("Affected side")
         self.aff_side_left = QRadioButton("Left")
@@ -222,7 +223,7 @@ class MyWindow(QWidget):
         
         self.folderbrowse_button = QPushButton("Choose Folder")
         self.folderbrowse_button.setStyleSheet(style_left_round)
-        self.folderbrowse_button.setFixedSize(int(100*self.MF), int(44*self.MF))
+        self.folderbrowse_button.setFixedSize(int(130*self.MF), int(44*self.MF))
         
         
         # Final set of buttons
@@ -257,13 +258,13 @@ class MyWindow(QWidget):
         self.exit_button.setStyleSheet(style_allround)
         self.exit_button.setIcon(QIcon(exit_dir))
         self.exit_button.setIconSize(QtCore.QSize(65,26))
-        self.exit_button.setFixedHeight(44)
+        self.exit_button.setFixedHeight(int(44*self.MF))
         
 
         # Now the single-image-exclusive layout
         self.imagebrowse_button = QPushButton("Choose Image")
         self.imagebrowse_button.setStyleSheet(style_left_round)
-        self.imagebrowse_button.setFixedSize(int(100*self.MF), int(44*self.MF))
+        self.imagebrowse_button.setFixedSize(int(130*self.MF), int(44*self.MF))
         self.segment_folder_button = QPushButton("")
         self.segment_folder_button.setStyleSheet(style_allround)
         self.segment_folder_button.setIcon(QIcon(segment_folder_dir))
