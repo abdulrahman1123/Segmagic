@@ -5,7 +5,7 @@ from skimage.measure import label, regionprops
 import glob
 import pandas as pd
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('QtAgg')
 import matplotlib.pyplot as plt
 
 import os
@@ -13,10 +13,9 @@ import sys
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QButtonGroup,
                              QRadioButton,QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView,
                              QGridLayout,QDesktopWidget,QFrame,QSizePolicy)
-from PyQt5.QtGui import QPixmap,QFont,QImage,QIcon,QPainter
-from PyQt5 import QtCore, QtSvg
-from PyQt5.QtCore import Qt,QSize
-
+from PyQt5.QtGui import QPixmap,QFont,QImage,QIcon
+from PyQt5 import QtCore
+from PyQt5.QtCore import Qt
 
 def find_intensity(image_dir,side_info, model_type):
     """
@@ -30,57 +29,81 @@ def find_intensity(image_dir,side_info, model_type):
     print(base_path+f'/{model_type}')
     seg = Segmagic(base_path+f'/{model_type}')
     afctd_side = side_info.lower()
-    labels = [model_type]
+    labels = ['MCP','IP','C'] if model_type == 'hand_p3' else [model_type]
+    n_mask_regions = 18 if model_type== 'hand_p3' else 2
 
     # predict mask
     image_to_predict = imread(image_dir).transpose(2, 0, 1)
     predicted_mask, uncertainty = seg.predict_image(image_to_predict, labels, show=False)
     labeled_mask = label(predicted_mask)
     region_inds, region_count = np.unique(labeled_mask, return_counts=True)
-    n_masks = len(np.where(region_count>1500)[0])-1
+    n_major_masks = len(np.where(region_count>1500)[0])-1
     
     # if the resulting mask is just one big mask, add a vertical line to split the image into two
-    if n_masks==1:
+    if n_major_masks==1:
         print("\nOne big region was found. Splitting using a vertical line\n")
         image_to_predict[:,:,190:210] = 255
         predicted_mask, uncertainty = seg.predict_image(image_to_predict, labels, show=False)
         labeled_mask, n_masks = label(predicted_mask, return_num=True)
     # Extract largest regions
     region_inds, region_count = np.unique(labeled_mask, return_counts=True)
-    largest_regions = np.argsort(region_count)[::-1][1:3]
+    max_regions = np.min((len(region_count)-1,n_mask_regions))
+    largest_regions = np.argsort(region_count)[::-1][1:max_regions+1]
 
     # choose the biggest 2 regions and label them
     filtered_mask = np.where(~np.isin(labeled_mask,largest_regions),0,labeled_mask)
-    filtered_mask [filtered_mask== np.unique(filtered_mask)[1]] = 1 # make sure you have only 0, 1 and 2
-    filtered_mask [filtered_mask== np.unique(filtered_mask)[2]] = 2
+    # sometimes there are small additional clusters that intefere with the numbering. E.g., you
+    # might find that the largest clusters are 0,2 and 6. You want to convert that to 0,1 and 2
+    for i in range(1,max_regions+1):
+        filtered_mask [filtered_mask== np.unique(filtered_mask)[i]] = i
+
     filtered_regions = label(filtered_mask)
     
     img = image_to_predict.transpose((1,2,0))
-    props = regionprops(filtered_regions[:,:,0],img)
-
+    props_list = [regionprops(filtered_regions[:,:,i],img) for i in range(filtered_regions.shape[2])]
 
     # Extract centroids and side of affected extremity
-    centroids = [region.centroid for region in props]
-    region_side = ["right" if centroid[1]>200 else "left" for centroid in centroids]
-    region_afctd_extr = ["ipsi" if side==afctd_side else "contra" for side in region_side]
+    region_afctd_extr = []
+    intensity_dic = {'id':image_dir.replace(".tif","").split("/")[-1].split("\\")[-1],
+                     'ipsi':[],'contra':[],'ratio':[]}
 
-    # compute intensities
-    intensities = [255-np.mean(prop.intensity_mean) for prop in props]
-    intensity_dic = {side:intensity for side,intensity in zip(region_afctd_extr,intensities)}
-    if len(intensity_dic.keys()) ==1:
-        print ("Segmentation Failed")
-        return None, None, None, None, None
-    intensity_dic['ratio'] = intensity_dic['ipsi'] / intensity_dic['contra']
-    intensity_dic['id'] = image_dir.replace(".tif","").split("/")[-1].split("\\")[-1]
+    simple_filtered_mask = filtered_mask.copy()
+    for nlayer,props in enumerate(props_list):
+        centroids = [region.centroid[1] for region in props]
+        left_centroids = np.argsort(centroids)[0:int(len(centroids)/2)]
+        region_side = np.where(np.in1d(np.arange(len(centroids)),left_centroids),'left','right')
+        #region_side = ["right" if centroid[1]>200 else "left" for centroid in centroids]
+        region_afctd_extr = np.array(["ipsi" if side==afctd_side else "contra" for side in region_side])
+
+        # make sure that those on the ipsilateral side are marked as 1 and the contrlateral as 2
+        loc_filtered_mask = filtered_mask[:,:,nlayer].copy()
+        ipsi_points = np.isin(loc_filtered_mask,np.unique(loc_filtered_mask)[1::][region_afctd_extr == 'ipsi'])
+        contra_points = np.isin(loc_filtered_mask,np.unique(loc_filtered_mask)[1::][region_afctd_extr == 'contra'])
+        simple_filtered_mask[:,:,nlayer][ipsi_points] = 1
+        simple_filtered_mask[:,:,nlayer][contra_points] = 2
+        # compute intensities
+        intensity_dic['ipsi'].append(np.mean([255-np.mean(prop.intensity_mean) for prop in np.array(props)[region_afctd_extr == 'ipsi']]))
+        intensity_dic['contra'].append(np.mean([255 - np.mean(prop.intensity_mean) for prop in np.array(props)[region_afctd_extr == 'contra']]))
+        intensity_dic['ratio'].append(intensity_dic['ipsi'][-1] / intensity_dic['contra'][-1])
+
+    intensity_dic['ipsi'] = ", ".join(np.round(np.array(intensity_dic['ipsi']),1).astype(str))
+    intensity_dic['contra'] = ", ".join(np.round(np.array(intensity_dic['contra']),1).astype(str))
+    intensity_dic['ratio'] = ", ".join(np.round(np.array(intensity_dic['ratio']),2).astype(str))
+
+    filtered_mask = simple_filtered_mask[:,:,0]
+    for layer in range(1,simple_filtered_mask.shape[2]):
+        filtered_mask[simple_filtered_mask[:, :, layer] == 1] = 1
+        filtered_mask[simple_filtered_mask[:, :, layer] == 2] = 2
 
     return image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic
 
 # Choose by image
 base_path = os.getcwd()
 #data = pd.read_excel(base_path+'/pt_info.xlsx')
-#image_dir = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic\all_images\CRPS007_foot_1.tif" #CRPS007P3#CRPS004P1
-
-#find_intensity(image_dir,data, model_type)
+#image_dir = r"/home/abdulrahman/Downloads/CRPS Images/CRPS004_P3.tif"
+#model_type = 'hand_p3'
+#side_info = 'left'
+#find_intensity(image_dir,side_info, model_type)
 
 def clear_layout(layout):
     for i in reversed(range(layout.count())):
@@ -97,7 +120,6 @@ def clear_layout(layout):
 class MyWindow(QWidget):
     def __init__(self):
         super().__init__()
-
         # change window size depending on screen size
         sc_width = QDesktopWidget().screenGeometry(-1).width()
         self.MF  = 0.75*sc_width/1920 # magnification factor
@@ -134,7 +156,7 @@ class MyWindow(QWidget):
         single_img_label = QLabel("Segmenting a Single Image")
         single_img_label.setFont(QFont("Calibri", int(16 * self.MFF)))
 
-        folder_seg_label = QLabel("Segmenting Images in a Folder")
+        folder_seg_label = QLabel("Segmenting Multiple Images")
         folder_seg_label.setFont(QFont("Calibri", int(16 * self.MFF)))
 
         folder_seg_label_add = QLabel("(Hover over the question mark for more info)")
@@ -150,7 +172,8 @@ class MyWindow(QWidget):
         #tooltip_label.setToolTipDuration(5000)
 
         # TODO: make the label droppable
-        self.label1 = QLabel("For single-image analysis:\nEither drag and drop an image here,\nor use the 'Choose Image' button, and\npress 'Segment Image'")
+        label_txt = "For single-image analysis:\nEither drag and drop an image here,\nor use the 'Choose Image' button, and\npress 'Segment Image'"
+        self.label1 = image_label(label_txt,self)
         #self.label1.setAcceptDrops(True)
         self.label1.setFixedSize(int(450*self.MF), int(450*self.MF))
         self.label1.setStyleSheet("background-color: white;border-style: solid; border-width: 1px; border-color: black")
@@ -257,7 +280,7 @@ class MyWindow(QWidget):
         self.exit_button = QPushButton("")
         self.exit_button.setStyleSheet(style_allround)
         self.exit_button.setIcon(QIcon(exit_dir))
-        self.exit_button.setIconSize(QtCore.QSize(65,26))
+        self.exit_button.setIconSize(QtCore.QSize(int(65*self.MF),int(26*self.MF)))
         self.exit_button.setFixedHeight(int(44*self.MF))
         
 
@@ -294,6 +317,7 @@ class MyWindow(QWidget):
         self.sciphase_lo.addWidget(self.sciphase_label,0,0,1,2)
         self.sciphase_lo.addWidget(self.sciphase_12,1,0,1,1)
         self.sciphase_lo.addWidget(self.sciphase_3,1,1,1,1)
+
         
 
         # Prepare the vertical separator
@@ -340,9 +364,11 @@ class MyWindow(QWidget):
         self.folderselection_lo.addWidget(self.data_path_line,1,1,1,3)
         self.folderselection_lo.setHorizontalSpacing(0)
 
-        self.finalset_lo.addWidget(self.spacer_label)
-        self.finalset_lo.addWidget(self.spacer_label)
         self.finalset_lo.addWidget(self.exit_button)
+        self.finalset_lo.addWidget(self.spacer_label)
+        self.finalset_lo.addWidget(self.spacer_label)
+        self.finalset_lo.addWidget(self.spacer_label)
+        self.finalset_lo.setContentsMargins(0, 50, 0, 0)
         
         self.title_lo.addWidget(logo_label)
         self.title_lo.addWidget(self.title_label)
@@ -407,11 +433,11 @@ class MyWindow(QWidget):
     def editTable(self, content):
         current_row_count = self.tableWidget.rowCount()
         self.tableWidget.insertRow(current_row_count)
-        ipsi = QTableWidgetItem(str(np.round(content['ipsi'],1)))
+        ipsi = QTableWidgetItem(content['ipsi'])
         ipsi.setTextAlignment(Qt.AlignCenter)
-        contra = QTableWidgetItem(str(np.round(content['contra'],1)))
+        contra = QTableWidgetItem(content['contra'])
         contra.setTextAlignment(Qt.AlignCenter)
-        ratio = QTableWidgetItem(str(np.round(content['ratio'],2)))
+        ratio = QTableWidgetItem(content['ratio'])
         ratio.setTextAlignment(Qt.AlignCenter)
 
         id = QTableWidgetItem(content['id'])
@@ -514,8 +540,8 @@ class MyWindow(QWidget):
             plt.imshow(image_to_predict[0,:,:],cmap='gray')
             plt.imshow(filtered_mask, cmap=cmap, interpolation='nearest', alpha = 0.3)
             # Add text
-            for centroid,l_text in zip(centroids,region_afctd_extr):
-                plt.text(centroid[1],centroid[0],l_text, ha='center', font = 'Calibri', size = 20)
+            #for centroid,l_text in zip(centroids,region_afctd_extr):
+            #    plt.text(centroid[1],centroid[0],l_text, ha='center', font = 'Calibri', size = 20)
 
             plt.axis('off')
             plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
@@ -536,6 +562,26 @@ class MyWindow(QWidget):
         # Convert QImage to QPixmap
         pixmap = QPixmap(qimage)
         return pixmap
+class image_label(QLabel):
+    def __init__(self, title, parent):
+        super().__init__(title, parent)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, e):
+        m = e.mimeData()
+        if m.hasUrls():
+            e.accept()
+        else:
+            e.ignore()
+
+    def dropEvent(self, e):
+        m = e.mimeData()
+        if m.hasUrls():
+            img_path = m.urls()[0].toLocalFile()
+            pixmap = QPixmap(img_path)
+            self.setPixmap(pixmap.scaled(self.size(), QtCore.Qt.KeepAspectRatio))
+            self.parent().img_path_line.setText(m.urls()[0].toLocalFile())
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
