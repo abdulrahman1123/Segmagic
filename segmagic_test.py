@@ -36,7 +36,7 @@ def find_intensity(image_dir,side_info, model_type, fast_mode):
 
     # predict mask
     #image_to_predict = imread(image_dir).transpose(2, 0, 1)
-    image_to_predict = np.array(Image.open(image_dir)).transpose(2, 0, 1)## Continue from here
+    image_to_predict = np.array(Image.open(image_dir)).transpose(2, 0, 1)
     image_to_predict = image_to_predict[0:3,:,:] # some images have a 4th layer representing transparency (e.g., png images)
     predicted_mask, uncertainty = seg.predict_image(image_to_predict, labels, show=False)
     labeled_mask = label(predicted_mask)
@@ -68,7 +68,7 @@ def find_intensity(image_dir,side_info, model_type, fast_mode):
 
     # Extract centroids and side of affected extremity
     region_afctd_extr = []
-    intensity_dic = {'id':image_dir.replace(".tiff","").replace(".tif","").split("/")[-1].split("\\")[-1],
+    intensity_dic = {'id':".".join(image_dir.split(".")[0:-1]).split("/")[-1].split("\\")[-1],
                      'ipsi':[],'contra':[],'ratio':[]}
 
     simple_filtered_mask = filtered_mask.copy()
@@ -544,12 +544,13 @@ class MyWindow(QWidget):
         data_accepted = np.all([item in data.columns for item in ['ID','Side','Extremity']]) # Check if all columns are found in the data
         if data_accepted:
             folder_dir = self.folder_path_line.text()
-            file_names = [item.split("/")[-1].split("\\")[-1] for item in glob.glob(folder_dir+"/*.tif*")]
+            file_names = [item.split("/")[-1].split("\\")[-1] for item in glob.glob(folder_dir+"/*")]
 
             # Only proceed with the directories that follow the naming convention
             accepted_filenames = []
             for fn in file_names:
-                splitname = fn.replace(".tiff","").replace(".tif","").split("_")
+                splitname = ".".join(fn.split(".")[0:-1]).split("_")
+                print(splitname)
                 if len(splitname)==2:
                         if splitname[1].isdigit():
                             accepted_filenames.append(fn)
@@ -572,7 +573,7 @@ class MyWindow(QWidget):
             if len(accepted_filenames)>0:
                 for fn in accepted_filenames:
                     image_dir = f"{folder_dir}/{fn}"
-                    splitname = fn.replace(".tiff","").replace(".tif","").split("_")
+                    splitname = ".".join(fn.split(".")[0:-1]).split("_")
                     id,phase = splitname
                     extremity = data.loc[data['ID']==id,'Extremity'].values[0].lower()
                     model_type = 'hand' if 'up' in extremity else 'foot'
