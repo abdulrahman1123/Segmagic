@@ -1,5 +1,6 @@
 from segmagic_ml_small import Segmagic
-from tifffile import imread
+#from tifffile import imread
+from PIL import Image
 import numpy as np
 from skimage.measure import label, regionprops
 import glob
@@ -7,6 +8,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use('QtAgg')
 import matplotlib.pyplot as plt
+from matplotlib import patheffects
 
 import os
 import sys
@@ -27,14 +29,15 @@ def find_intensity(image_dir,side_info, model_type, fast_mode):
              the label for each segment produced ("ipsi" and "contra") corresponding to the segments; and a 
              dictionary that has intensity information
     """
-    print(base_path+f'/{model_type}')
     seg = Segmagic(base_path+f'/{model_type}',fast_mode)
     afctd_side = side_info.lower()
     labels = ['MCP','IP','C'] if model_type == 'hand_p3' else [model_type]
     n_mask_regions = 18 if model_type== 'hand_p3' else 2
 
     # predict mask
-    image_to_predict = imread(image_dir).transpose(2, 0, 1)
+    #image_to_predict = imread(image_dir).transpose(2, 0, 1)
+    image_to_predict = np.array(Image.open(image_dir)).transpose(2, 0, 1)## Continue from here
+    image_to_predict = image_to_predict[0:3,:,:] # some images have a 4th layer representing transparency (e.g., png images)
     predicted_mask, uncertainty = seg.predict_image(image_to_predict, labels, show=False)
     labeled_mask = label(predicted_mask)
     region_inds, region_count = np.unique(labeled_mask, return_counts=True)
@@ -65,7 +68,7 @@ def find_intensity(image_dir,side_info, model_type, fast_mode):
 
     # Extract centroids and side of affected extremity
     region_afctd_extr = []
-    intensity_dic = {'id':image_dir.replace(".tif","").split("/")[-1].split("\\")[-1],
+    intensity_dic = {'id':image_dir.replace(".tiff","").replace(".tif","").split("/")[-1].split("\\")[-1],
                      'ipsi':[],'contra':[],'ratio':[]}
 
     simple_filtered_mask = filtered_mask.copy()
@@ -90,21 +93,25 @@ def find_intensity(image_dir,side_info, model_type, fast_mode):
     intensity_dic['ipsi'] = ", ".join(np.round(np.array(intensity_dic['ipsi']),1).astype(str))
     intensity_dic['contra'] = ", ".join(np.round(np.array(intensity_dic['contra']),1).astype(str))
     intensity_dic['ratio'] = ", ".join(np.round(np.array(intensity_dic['ratio']),2).astype(str))
-
     filtered_mask = simple_filtered_mask[:,:,0]
     for layer in range(1,simple_filtered_mask.shape[2]):
         filtered_mask[simple_filtered_mask[:, :, layer] == 1] = 1
         filtered_mask[simple_filtered_mask[:, :, layer] == 2] = 2
-
-    return image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic
+    ipsi_cent = (np.median(np.where(filtered_mask==1)[0]),np.median(np.where(filtered_mask==1)[1]))
+    contr_cent = (np.median(np.where(filtered_mask==2)[0]),np.median(np.where(filtered_mask==2)[1]))
+    centroids = (ipsi_cent,contr_cent)
+    extremity = ['ipsi','contra']
+    return image_to_predict,filtered_mask, centroids, extremity, intensity_dic
 
 # Choose by image
 base_path = os.getcwd()
 #data = pd.read_excel(base_path+'/pt_info.xlsx')
-#image_dir = r"/home/abdulrahman/Downloads/CRPS Images/CRPS004_P3.tif"
-#model_type = 'hand_p3'
+#image_dir = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic\all_images\CRPS007_1.tiff"
+#image_dir = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic\all_images\CRPS007_2.png"
+#model_type = 'hand'
 #side_info = 'left'
-#find_intensity(image_dir,side_info, model_type)
+#fast_mode = True
+#find_intensity(image_dir,side_info, model_type,fast_mode)
 
 def clear_layout(layout):
     for i in reversed(range(layout.count())):
@@ -121,15 +128,18 @@ def clear_layout(layout):
 class MyWindow(QWidget):
     def __init__(self):
         super().__init__()
+        self.setWindowIcon(QIcon(base_path+'\logo.png'))
+        self.setWindowTitle("ScintiSeg")
+
         # change window size depending on screen size
         sc_width = QDesktopWidget().screenGeometry(-1).width()
         self.MF  = sc_width/1920 # magnification factor
-        print(self.MF)
         self.MFF =sc_width/1920 # magnification factor for fonts
         self.fast_mode = False # set fast mode to False by default
         # Create main layout
         self.main_layout = QHBoxLayout()
 
+        self.right_layout = QVBoxLayout()
         self.left_layout = QVBoxLayout()
         self.output_layout = QVBoxLayout()
         self.toggle_layout = QHBoxLayout()
@@ -162,12 +172,12 @@ class MyWindow(QWidget):
             pulse_checked_color="#44FFB000")  # Custom color during pulse animation
         self.toggle.setFixedSize(self.toggle.sizeHint())
 
-        self.toggle_info = QLabel("Use fast segmentation mode")
+        self.toggle_info = QLabel("     Fast segmentation mode")
         self.toggle_info.setFont(QFont("Calibri",int(14 * self.MFF)))
         toggle_qm_label = QLabel()
         toggle_qm_label.setFixedSize(int(60 * self.MF), int(30 * self.MF))
         toggle_qm_label.setPixmap(qm_icon.scaled(toggle_qm_label.size(), QtCore.Qt.KeepAspectRatio))
-        toggle_qm_label.setToolTip('Fast segmentation mode gives results faster, but is less accurate.')
+        toggle_qm_label.setToolTip('Fast segmentation mode gives results faster, but is less accurate.\n(Experimental feature, use with caution)')
 
 
 
@@ -184,15 +194,15 @@ class MyWindow(QWidget):
         tooltip_label = QLabel()
         tooltip_label.setFixedSize(int(80 * self.MF), int(40 * self.MF))
         tooltip_label.setPixmap(qm_icon.scaled(tooltip_label.size(), QtCore.Qt.KeepAspectRatio))
-        tip = ("Choose a data set (excel file)\nIt should have three columns (ID, Side and Extremity), containing\ninformation about the images to be segmented.\nThe image naming should follow the following scheme:\n<subID_scintiPhase>.tif (e.g. CRPS006_P3.tif)")
+        tip = ("Choose a data set (excel file)\nIt should have three columns (ID, Side and Extremity), containing\ninformation about the images to be segmented.\nThe image naming should follow the following scheme:\n<subID_scintiPhase>.tif (e.g. CRPS006_3.tif)")
         tooltip_label.setToolTip(f'<img src="{base_path+"/tooltip.png"}">')
         #tooltip_label.setToolTipDuration(5000)
 
-        # TODO: make the label droppable
-        label_txt = "For single-image analysis:\nEither drag and drop an image here,\nor use the 'Choose Image' button, and\npress 'Segment Image'"
+        label_txt = "For single-image analysis\nEither drag and drop an image here, or use\nthe 'Choose Image' button, and press 'Segment Image'"
         self.label1 = image_label(label_txt,self)
+        self.label1.setAlignment(Qt.AlignCenter)
         #self.label1.setAcceptDrops(True)
-        self.label1.setFixedSize(int(450*self.MF), int(450*self.MF))
+        self.label1.setFixedSize(int(400*self.MF), int(400*self.MF))
         self.label1.setStyleSheet("background-color: white;border-style: solid; border-width: 1px; border-color: black")
 
 
@@ -209,6 +219,9 @@ class MyWindow(QWidget):
         self.databrowse_button.setStyleSheet(style_left_round)
         self.databrowse_button.setFixedSize(int(130*self.MF), int(44*self.MF))
         
+        self.name_error_label = QLabel()
+        self.name_error_label.setWordWrap(True)
+
         # For single-image mode, create radiobuttons and labels
         font_sub = QFont("Calibri", int(11*self.MFF))
 
@@ -308,7 +321,7 @@ class MyWindow(QWidget):
         self.segment_folder_button = QPushButton("")
         self.segment_folder_button.setStyleSheet(style_allround)
         self.segment_folder_button.setIcon(QIcon(segment_folder_dir))
-        self.segment_folder_button.setIconSize(QtCore.QSize(int(100*self.MF),int(40*self.MF)))
+        self.segment_folder_button.setIconSize(QtCore.QSize(int(80*self.MF),int(80*self.MF)))
         self.segment_folder_button.setFixedHeight(int(88*self.MF))
 
 
@@ -337,11 +350,6 @@ class MyWindow(QWidget):
         self.sciphase_lo.addWidget(self.sciphase_12,1,0,1,1)
         self.sciphase_lo.addWidget(self.sciphase_3,1,1,1,1)
 
-        self.toggle_layout.addWidget(self.toggle_info)
-        self.toggle_layout.addWidget(toggle_qm_label)
-        self.toggle_layout.addWidget(self.toggle)
-
-
         # Prepare the vertical separator
         self.separator = QFrame()
         self.separator.setFrameShape(QFrame.VLine)
@@ -368,8 +376,8 @@ class MyWindow(QWidget):
         Separador3.setLineWidth(int(1 * self.MF))
 
         # Add all widgets to thier respective layouts
-        self.output_layout.addWidget(self.label1)
-        self.output_layout.addWidget(self.tableWidget)
+        #self.output_layout.addWidget(self.label1)
+        #self.output_layout.addWidget(self.tableWidget)
 
         self.image_info_lo.addLayout(self.aff_side_lo)
         self.image_info_lo.addWidget(self.spacer_label)
@@ -384,19 +392,25 @@ class MyWindow(QWidget):
         self.imageselection_lo.addWidget(self.segment_img_button)
         self.imageselection_lo.setSpacing(0)
 
-        self.folderselection_lo.addWidget(self.segment_folder_button,0,5,2,1)
-        self.folderselection_lo.addWidget(self.folderbrowse_button,0,0,1,1)
-        self.folderselection_lo.addWidget(self.folder_path_line,0,1,1,3)
-        self.folderselection_lo.addWidget(self.spacer_label,0,4,1,1)
-        self.folderselection_lo.addWidget(self.databrowse_button,1,0,1,1)
-        self.folderselection_lo.addWidget(self.data_path_line,1,1,1,3)
+        self.folderselection_lo.addWidget(self.segment_folder_button,0,9,2,2)
+        self.folderselection_lo.addWidget(self.folderbrowse_button,0,0,1,2)
+        self.folderselection_lo.addWidget(self.folder_path_line,0,2,1,6)
+        self.folderselection_lo.addWidget(self.spacer_label,0,8,1,1)
+        self.folderselection_lo.addWidget(self.databrowse_button,1,0,1,2)
+        self.folderselection_lo.addWidget(self.data_path_line,1,2,1,6)
+        self.folderselection_lo.addWidget(self.name_error_label,2,0,1,11)
         self.folderselection_lo.setHorizontalSpacing(0)
 
+        self.toggle_layout.addWidget(self.toggle_info)
+        self.toggle_layout.addWidget(toggle_qm_label)
+        self.toggle_layout.addWidget(self.toggle)
+        
         self.finalset_lo.addWidget(self.exit_button)
-        self.finalset_lo.addWidget(self.spacer_label)
-        self.finalset_lo.addWidget(self.spacer_label)
-        self.finalset_lo.addWidget(self.spacer_label)
-        self.finalset_lo.setContentsMargins(0, 50, 0, 0)
+        self.finalset_lo.addLayout(self.toggle_layout)
+        #self.finalset_lo.addWidget(self.spacer_label)
+        #self.finalset_lo.addWidget(self.spacer_label)
+        #self.finalset_lo.addWidget(self.spacer_label)
+        
         
         self.title_lo.addWidget(logo_label)
         self.title_lo.addWidget(self.title_label)
@@ -406,29 +420,30 @@ class MyWindow(QWidget):
         #self.folder_tootlip_lo.addWidget(self.separator)
 
         # Add all Layouts to the main one
+        #self.right_layout.addWidget(Separador1)
+        #self.right_layout.addWidget(Separador2)
+        self.right_layout.addWidget(single_img_label)
+        self.right_layout.addLayout(self.image_info_lo)
+        self.right_layout.addLayout(self.imageselection_lo)
+        self.right_layout.addWidget(Separador3)
+        #self.right_layout.addWidget(folder_seg_label)
+        self.right_layout.addLayout(self.folder_tootlip_lo)
+        self.right_layout.addLayout(self.dataselection_lo)
+        self.right_layout.addLayout(self.folderselection_lo)
+        self.right_layout.addWidget(self.tableWidget)
+
+        
         self.left_layout.addLayout(self.title_lo)
-        self.left_layout.addWidget(Separador1)
         self.left_layout.addLayout(self.toggle_layout)
-        self.left_layout.addWidget(Separador2)
-        self.left_layout.addWidget(single_img_label)
-        self.left_layout.addLayout(self.image_info_lo)
-        self.left_layout.addLayout(self.imageselection_lo)
-        self.left_layout.addWidget(Separador3)
-        #self.left_layout.addWidget(folder_seg_label)
-        self.left_layout.addLayout(self.folder_tootlip_lo)
-        self.left_layout.addLayout(self.dataselection_lo)
-        self.left_layout.addLayout(self.folderselection_lo)
+        self.left_layout.addWidget(self.label1)
         self.left_layout.addLayout(self.finalset_lo)
         
         self.main_layout.addLayout(self.left_layout)
-        self.main_layout.addLayout(self.output_layout)
+        self.main_layout.addWidget(self.spacer_label)
+        self.main_layout.addLayout(self.right_layout)
         
         # Set the layout
-        self.setLayout(self.main_layout)        
-        for i in range(self.main_layout.count()):
-            item = self.main_layout.itemAt(i)
-            #print(item)
-
+        self.setLayout(self.main_layout)
     
     def toggle_changed(self):
         if self.toggle.isChecked():
@@ -491,6 +506,7 @@ class MyWindow(QWidget):
         self.tableWidget.setColumnCount(4) 
         self.tableWidget.setHorizontalHeaderLabels(["ID","Ipsi", "Contra","Ratio"])
         self.tableWidget.setMinimumHeight(int(200*self.MF))
+        self.tableWidget.setMinimumWidth(int(450*self.MF))
         #self.tableWidget.horizontalHeader().setStretchLastSection(True)  # Stretch the last section
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Resize mode
         
@@ -523,13 +539,41 @@ class MyWindow(QWidget):
         self.label1.setPixmap(pixmap.scaled(self.label1.size(), QtCore.Qt.KeepAspectRatio))
 
     def segment_folder(self):
+        self.name_error_label.setText('')
         data = pd.read_excel(self.data_path_line.text())
-        files_dir = glob.glob(self.folder_path_line.text()+"/*")
-        print(files_dir)
-        if len(files_dir)>0:
-            for image_dir in files_dir:
-                if os.path.exists(image_dir):
-                    id,phase = image_dir.replace(".tif","").split("/")[-1].split("\\")[-1].split("_")
+        data_accepted = np.all([item in data.columns for item in ['ID','Side','Extremity']]) # Check if all columns are found in the data
+        if data_accepted:
+            folder_dir = self.folder_path_line.text()
+            file_names = [item.split("/")[-1].split("\\")[-1] for item in glob.glob(folder_dir+"/*.tif*")]
+
+            # Only proceed with the directories that follow the naming convention
+            accepted_filenames = []
+            for fn in file_names:
+                splitname = fn.replace(".tiff","").replace(".tif","").split("_")
+                if len(splitname)==2:
+                        if splitname[1].isdigit():
+                            accepted_filenames.append(fn)
+            wrong_filenames = [fn for fn in file_names if fn not in accepted_filenames]
+            err_text = ""
+            if len(wrong_filenames)>0:
+                err_text += f"(See tooltip) The following filenames do not match the naming scheme: {wrong_filenames}"
+        
+            ids = [item.split("_")[0] for item in accepted_filenames]
+            ids_notindata = [id for id in ids if not (id in data['ID'].values)]
+            accepted_vals = ['upper','lower','right','left','Upper','Lower','Right','Left']
+            ids_withoutinfo = [id for id in ids if not np.all(data.loc[data['ID']==id,['Side','Extremity']].isin(accepted_vals))]
+            wrong_ids = ids_notindata+ids_withoutinfo
+            if len(wrong_ids)>0:
+                err_text += f" ..... The following IDs have no data in the data frame: {wrong_ids}"
+            if len(err_text)>0:
+                self.name_error_label.setText(f'<font color="darkred">{err_text}</font>')
+
+            accepted_filenames = [item for item in accepted_filenames if item.split("_")[0] not in wrong_ids]
+            if len(accepted_filenames)>0:
+                for fn in accepted_filenames:
+                    image_dir = f"{folder_dir}/{fn}"
+                    splitname = fn.replace(".tiff","").replace(".tif","").split("_")
+                    id,phase = splitname
                     extremity = data.loc[data['ID']==id,'Extremity'].values[0].lower()
                     model_type = 'hand' if 'up' in extremity else 'foot'
 
@@ -539,27 +583,28 @@ class MyWindow(QWidget):
                     image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info, model_type, self.fast_mode)
                     self.editTable(intensity_dic)
 
-            # plot the last image only
-            color_list = ['steelblue', 'indianred', 'olivedrab', 'darkgoldenrod', 'darkmagenta', 'grey', 'palevioletred',
-                          'sienna', 'beige', 'coral']
+                # plot the last image only
+                color_list = ['steelblue', 'indianred', 'olivedrab', 'darkgoldenrod', 'darkmagenta', 'grey', 'palevioletred',
+                            'sienna', 'beige', 'coral']
 
-            cmap = plt.cm.colors.ListedColormap(['white'] + color_list[0:len(centroids)])
-            plt.close()
-            fig = plt.subplots(figsize=(5, 5))
-            plt.imshow(image_to_predict[0, :, :], cmap='gray')
-            plt.imshow(filtered_mask, cmap=cmap, interpolation='nearest', alpha=0.3)
-            # Add text
-            #TODO: fix text here as well
-            #for centroid, l_text in zip(centroids, region_afctd_extr):
-            #    plt.text(centroid[1], centroid[0], l_text, ha='center', font='Calibri', size=20)
+                cmap = plt.cm.colors.ListedColormap(['white'] + color_list[0:len(centroids)])
+                plt.close()
+                fig = plt.subplots(figsize=(5, 5))
+                plt.imshow(image_to_predict[0, :, :], cmap='gray')
+                plt.imshow(filtered_mask, cmap=cmap, interpolation='nearest', alpha=0.3)
+                # Add text
+                for centroid, l_text in zip(centroids, region_afctd_extr):
+                    plt.text(centroid[1],centroid[0],l_text, ha='center', font = 'Calibri', size = 26)#path_effects=[patheffects.withStroke(linewidth=2, foreground='white')]
+                    
+                plt.axis('off')
+                plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
 
-            plt.axis('off')
-            plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
-
-            plt.savefig(base_path + "/temp_file.png")
-            plt.close()
-            pixmap_regions = QPixmap(base_path + "/temp_file.png")
-            self.label1.setPixmap(pixmap_regions.scaled(self.label1.size(), QtCore.Qt.KeepAspectRatio))
+                plt.savefig(base_path + "/temp_file.png")
+                plt.close()
+                pixmap_regions = QPixmap(base_path + "/temp_file.png")
+                self.label1.setPixmap(pixmap_regions.scaled(self.label1.size(), QtCore.Qt.KeepAspectRatio))
+        else:
+            self.name_error_label.setText(f'<font color="darkred">the chosen data frame does not have the needed columns (ID, Side, Extremity)</font>')
     def segment_image(self):
         image_dir = self.img_path_line.text()
         if os.path.exists(image_dir):
@@ -575,12 +620,11 @@ class MyWindow(QWidget):
             plt.close()
             fig = plt.subplots(figsize = (5,5))
             plt.imshow(image_to_predict[0,:,:],cmap='gray')
-            # TODO: Make sure that ipsi is red and contra is blue
+
             plt.imshow(filtered_mask, cmap=cmap, interpolation='nearest', alpha = 0.3)
             # Add text
-            # TODO: Write text for ipsi and contra
-            #for centroid,l_text in zip(centroids,region_afctd_extr):
-            #    plt.text(centroid[1],centroid[0],l_text, ha='center', font = 'Calibri', size = 20)
+            for centroid,l_text in zip(centroids,region_afctd_extr):
+                plt.text(centroid[1],centroid[0],l_text, ha='center', font = 'Calibri', size = 26)#path_effects=[patheffects.withStroke(linewidth=2, foreground='white')]
 
             plt.axis('off')
             plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
@@ -632,4 +676,3 @@ if __name__ == "__main__":
 
 
 
-        

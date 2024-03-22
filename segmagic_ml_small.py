@@ -41,12 +41,12 @@ class Segmagic():
             #self.fmodel, self.params, self.buffers = combine_state_for_ensemble(self.models)
         else:
             if torch.cuda.is_available():
-                    model = torch.load(filepaths[0])
-                    model.eval()
-                    model.cuda()
+                self.model = torch.load(filepaths[0])
+                self.model.eval()
+                self.model.cuda()
             else:
-                model = torch.load(filepaths[0], map_location=torch.device('cpu'))
-                model.eval()
+                self.model = torch.load(filepaths[0], map_location=torch.device('cpu'))
+                self.model.eval()
 
 
     
@@ -135,7 +135,10 @@ class Segmagic():
                         #_, pred = torch.max(ensemble_output, 1)
                         
                     else:
-                        pred = self.model(img_tile.cuda())
+                        if torch.cuda.is_available():
+                            pred = self.model(img_tile.cuda())
+                        else:
+                            pred = self.model(img_tile)
 
                     pred = pred.squeeze(0).sigmoid().cpu().numpy()
                     
