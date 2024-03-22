@@ -13,11 +13,12 @@ import sys
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QButtonGroup,
                              QRadioButton,QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView,
                              QGridLayout,QDesktopWidget,QFrame,QSizePolicy)
+from qtwidgets import AnimatedToggle
 from PyQt5.QtGui import QPixmap,QFont,QImage,QIcon
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 
-def find_intensity(image_dir,side_info, model_type):
+def find_intensity(image_dir,side_info, model_type, fast_mode):
     """
     Find segments of ipsilateral and contralateral sides and calculate the intensity inside each region.
     :param image_dir: directory of the image to be segmented
@@ -27,7 +28,7 @@ def find_intensity(image_dir,side_info, model_type):
              dictionary that has intensity information
     """
     print(base_path+f'/{model_type}')
-    seg = Segmagic(base_path+f'/{model_type}')
+    seg = Segmagic(base_path+f'/{model_type}',fast_mode)
     afctd_side = side_info.lower()
     labels = ['MCP','IP','C'] if model_type == 'hand_p3' else [model_type]
     n_mask_regions = 18 if model_type== 'hand_p3' else 2
@@ -122,15 +123,16 @@ class MyWindow(QWidget):
         super().__init__()
         # change window size depending on screen size
         sc_width = QDesktopWidget().screenGeometry(-1).width()
-        self.MF  = 0.75*sc_width/1920 # magnification factor
+        self.MF  = sc_width/1920 # magnification factor
         print(self.MF)
-        self.MFF =0.6*sc_width/1920 # magnification factor for fonts
-
+        self.MFF =sc_width/1920 # magnification factor for fonts
+        self.fast_mode = False # set fast mode to False by default
         # Create main layout
         self.main_layout = QHBoxLayout()
 
         self.left_layout = QVBoxLayout()
         self.output_layout = QVBoxLayout()
+        self.toggle_layout = QHBoxLayout()
         self.dataselection_lo = QHBoxLayout()
         self.image_info_lo = QHBoxLayout()
         self.title_lo = QHBoxLayout()
@@ -153,6 +155,22 @@ class MyWindow(QWidget):
         logo_label.setFixedSize(int(75 * self.MF), int(75 * self.MF))
         logo_label.setPixmap(renderer.scaled(logo_label.size(), QtCore.Qt.KeepAspectRatio))
 
+        qm_icon = QPixmap(base_path+"/question.png")
+
+        self.toggle = AnimatedToggle(
+            checked_color="#FFB000",  # Custom color when checked
+            pulse_checked_color="#44FFB000")  # Custom color during pulse animation
+        self.toggle.setFixedSize(self.toggle.sizeHint())
+
+        self.toggle_info = QLabel("Use fast segmentation mode")
+        self.toggle_info.setFont(QFont("Calibri",int(14 * self.MFF)))
+        toggle_qm_label = QLabel()
+        toggle_qm_label.setFixedSize(int(60 * self.MF), int(30 * self.MF))
+        toggle_qm_label.setPixmap(qm_icon.scaled(toggle_qm_label.size(), QtCore.Qt.KeepAspectRatio))
+        toggle_qm_label.setToolTip('Fast segmentation mode gives results faster, but is less accurate.')
+
+
+
         single_img_label = QLabel("Segmenting a Single Image")
         single_img_label.setFont(QFont("Calibri", int(16 * self.MFF)))
 
@@ -163,10 +181,9 @@ class MyWindow(QWidget):
         folder_seg_label_add.setFont(QFont("Calibri", int(13 * self.MFF)))
         folder_seg_label_add.setWordWrap(True)
 
-        tooltip_icon = QPixmap(base_path+"/question.png")
         tooltip_label = QLabel()
         tooltip_label.setFixedSize(int(80 * self.MF), int(40 * self.MF))
-        tooltip_label.setPixmap(tooltip_icon.scaled(tooltip_label.size(), QtCore.Qt.KeepAspectRatio))
+        tooltip_label.setPixmap(qm_icon.scaled(tooltip_label.size(), QtCore.Qt.KeepAspectRatio))
         tip = ("Choose a data set (excel file)\nIt should have three columns (ID, Side and Extremity), containing\ninformation about the images to be segmented.\nThe image naming should follow the following scheme:\n<subID_scintiPhase>.tif (e.g. CRPS006_P3.tif)")
         tooltip_label.setToolTip(f'<img src="{base_path+"/tooltip.png"}">')
         #tooltip_label.setToolTipDuration(5000)
@@ -301,7 +318,9 @@ class MyWindow(QWidget):
         self.databrowse_button.clicked.connect(self.browse_data)
         self.segment_img_button.clicked.connect(self.segment_image)
         self.segment_folder_button.clicked.connect(self.segment_folder)
+        self.toggle.toggled.connect(self.toggle_changed)
         self.exit_button.clicked.connect(self.close)
+        
         
         self.createTable()
         
@@ -318,7 +337,10 @@ class MyWindow(QWidget):
         self.sciphase_lo.addWidget(self.sciphase_12,1,0,1,1)
         self.sciphase_lo.addWidget(self.sciphase_3,1,1,1,1)
 
-        
+        self.toggle_layout.addWidget(self.toggle_info)
+        self.toggle_layout.addWidget(toggle_qm_label)
+        self.toggle_layout.addWidget(self.toggle)
+
 
         # Prepare the vertical separator
         self.separator = QFrame()
@@ -338,6 +360,12 @@ class MyWindow(QWidget):
         Separador2.setStyleSheet('color: lightgrey')
         Separador2.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
         Separador2.setLineWidth(int(1 * self.MF))
+
+        Separador3 = QFrame()
+        Separador3.setFrameShape(QFrame.HLine)  # Set the shape to horizontal line
+        Separador3.setStyleSheet('color: lightgrey')
+        Separador3.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
+        Separador3.setLineWidth(int(1 * self.MF))
 
         # Add all widgets to thier respective layouts
         self.output_layout.addWidget(self.label1)
@@ -380,10 +408,12 @@ class MyWindow(QWidget):
         # Add all Layouts to the main one
         self.left_layout.addLayout(self.title_lo)
         self.left_layout.addWidget(Separador1)
+        self.left_layout.addLayout(self.toggle_layout)
+        self.left_layout.addWidget(Separador2)
         self.left_layout.addWidget(single_img_label)
         self.left_layout.addLayout(self.image_info_lo)
         self.left_layout.addLayout(self.imageselection_lo)
-        self.left_layout.addWidget(Separador2)
+        self.left_layout.addWidget(Separador3)
         #self.left_layout.addWidget(folder_seg_label)
         self.left_layout.addLayout(self.folder_tootlip_lo)
         self.left_layout.addLayout(self.dataselection_lo)
@@ -398,6 +428,13 @@ class MyWindow(QWidget):
         for i in range(self.main_layout.count()):
             item = self.main_layout.itemAt(i)
             #print(item)
+
+    
+    def toggle_changed(self):
+        if self.toggle.isChecked():
+            self.fast_mode = True
+        else:
+            self.fast_mode = False
 
     def build_multiple_lo(self):
         # OLD FUNCTION ... IGNORE
@@ -499,7 +536,7 @@ class MyWindow(QWidget):
                     # hand_p3 is a special model for the hands
                     model_type = 'hand_p3'if model_type+phase == 'hand3' else model_type
                     side_info = data.loc[data['ID']==id,'Side'].values[0].lower()
-                    image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info, model_type)
+                    image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info, model_type, self.fast_mode)
                     self.editTable(intensity_dic)
 
             # plot the last image only
@@ -529,10 +566,9 @@ class MyWindow(QWidget):
             side_info = "left" if self.aff_side_left.isChecked() else "right"
             model_type = "hand" if self.handfoot_hand.isChecked() else "foot"
             phase = "3" if self.sciphase_3.isChecked() else "12"
-            id = image_dir.replace(".tif","").split("/")[-1].split("\\")[-1]
             
             model_type = 'hand_p3'if model_type+phase == 'hand3' else model_type
-            image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info, model_type)
+            image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info, model_type, self.fast_mode)
             color_list = ['steelblue', 'indianred','olivedrab','darkgoldenrod','darkmagenta','grey','palevioletred','sienna','beige','coral']
 
             cmap = plt.cm.colors.ListedColormap(['white']+color_list[0:len(centroids)])
@@ -592,3 +628,8 @@ if __name__ == "__main__":
     window.show()
     sys.exit(app.exec_())
 
+
+
+
+
+        

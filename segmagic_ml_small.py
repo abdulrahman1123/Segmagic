@@ -10,8 +10,9 @@ import os
         
 
 class Segmagic():
-    def __init__(self, model_folder=''):
+    def __init__(self, model_folder='', fast_mode = False):
         self.model_folder = model_folder + '/model'
+        self.fast_mode = fast_mode
         try:
             os.mkdir(self.model_folder)
         except:
@@ -23,7 +24,7 @@ class Segmagic():
     def load_model(self):
         print(self.model_folder)
         filepaths = glob.glob(f"{self.model_folder}/*.pth")
-        if len(filepaths) > 0:
+        if len(filepaths) > 0 and not self.fast_mode:
             self.ensemble = True
             self.models = []
             for filepath in filepaths:
@@ -39,9 +40,13 @@ class Segmagic():
 
             #self.fmodel, self.params, self.buffers = combine_state_for_ensemble(self.models)
         else:
-            self.model = torch.load(filepaths[0])
-            self.model.eval()
-            self.model.cuda()
+            if torch.cuda.is_available():
+                    model = torch.load(filepaths[0])
+                    model.eval()
+                    model.cuda()
+            else:
+                model = torch.load(filepaths[0], map_location=torch.device('cpu'))
+                model.eval()
 
 
     
