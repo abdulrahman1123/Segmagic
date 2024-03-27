@@ -232,7 +232,8 @@ class MyWindow(QWidget):
         self.next_button.setFixedHeight(int(400*self.MF))
         self.next_button.setFixedWidth(int(30*self.MF))
         self.next_button.setStyleSheet("QPushButton {background-color: transparent;}"
-            "QPushButton:pressed { background-color: rgba(128, 128, 128, 50); }")
+                                       "QPushButton:hover {background-color: rgba(128, 128, 128, 25);}"
+                                       "QPushButton:pressed { background-color: rgba(128, 128, 128, 75); }")
 
         self.prev_button = QPushButton()
         self.prev_button.setIcon(QIcon(prev_dir))
@@ -240,7 +241,8 @@ class MyWindow(QWidget):
         self.prev_button.setFixedHeight(int(400*self.MF))
         self.prev_button.setFixedWidth(int(30*self.MF))
         self.prev_button.setStyleSheet("QPushButton {background-color: transparent;}"
-            "QPushButton:pressed { background-color: rgba(128, 128, 128, 50); }")
+                                       "QPushButton:hover {background-color: rgba(128, 128, 128, 25);}"
+                                       "QPushButton:pressed { background-color: rgba(128, 128, 128, 75); }")
 
 
         # Create data selection widgets
@@ -366,7 +368,8 @@ class MyWindow(QWidget):
         #self.copy_button.setFixedHeight(int(400*self.MF))
         #self.copy_button.setFixedWidth(int(30*self.MF))
         self.copy_button.setStyleSheet("QPushButton {background-color: transparent;}"
-            "QPushButton:pressed { background-color: rgba(128, 128, 128, 50); }")
+                                       "QPushButton:hover {background-color: rgba(128, 128, 128, 25);}"
+                                       "QPushButton:pressed { background-color: rgba(128, 128, 128, 75); }")
 
 
 
@@ -467,7 +470,7 @@ class MyWindow(QWidget):
         #self.folder_tootlip_lo.addWidget(self.separator)
 
         self.tableLayout.addWidget(self.tableWidget,0,0,100,1)
-        self.tableLayout.addWidget(self.copy_button,91,0,11,1)
+        self.tableLayout.addWidget(self.copy_button,91,0,10,1)
 
         # Add all Layouts to the main one
         #self.right_layout.addWidget(Separador1)
@@ -733,3 +736,4 @@ if __name__ == "__main__":
     window = MyWindow()
     window.show()
     sys.exit(app.exec_())
+
