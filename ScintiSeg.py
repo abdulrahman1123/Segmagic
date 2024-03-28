@@ -5,7 +5,8 @@ from skimage.measure import label, regionprops
 import glob
 import pandas as pd
 import matplotlib
-matplotlib.use('QtAgg')
+
+matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 
 
@@ -19,7 +20,7 @@ from qtwidgets import AnimatedToggle
 from PyQt5.QtGui import QPixmap,QFont,QImage,QIcon,QGuiApplication
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
-
+from matplotlib import rcsetup
 
 def find_intensity(image_dir,side_info, model_type, fast_mode):
     """
@@ -141,7 +142,7 @@ class MyWindow(QWidget):
         # change window size depending on screen size
         #sc_width = QDesktopWidget().screenGeometry(-1).width()
         self.MF  = log_dpi/96 # magnification factor
-        
+        self.main_font = 'Arial'
         # create the global list of images
         self.images = []
         self.im_ind = -1
@@ -170,7 +171,7 @@ class MyWindow(QWidget):
         
         self.title_label = QLabel("ScintiSeg", self)
         self.title_label.setWordWrap(True)
-        self.title_label.setFont(QFont("Calibri", int(22)))
+        self.title_label.setFont(QFont(self.main_font, int(20)))
         self.title_label.setAlignment(Qt.AlignCenter)
 
         renderer = QPixmap(base_path+"/logo.png")
@@ -186,7 +187,7 @@ class MyWindow(QWidget):
         self.toggle.setFixedSize(self.toggle.sizeHint())
 
         self.toggle_info = QLabel("    Fast segmentation")
-        self.toggle_info.setFont(QFont("Calibri",int(18)))
+        self.toggle_info.setFont(QFont(self.main_font,int(16)))
         toggle_qm_label = QLabel()
         toggle_qm_label.setFixedSize(int(60 * self.MF), int(30 * self.MF))
         toggle_qm_label.setPixmap(qm_icon.scaled(toggle_qm_label.size(), QtCore.Qt.KeepAspectRatio))
@@ -195,13 +196,13 @@ class MyWindow(QWidget):
 
 
         single_img_label = QLabel("Segmenting a Single Image")
-        single_img_label.setFont(QFont("Calibri", int(20)))
+        single_img_label.setFont(QFont(self.main_font, int(18)))
 
         folder_seg_label = QLabel("Segmenting Multiple Images")
-        folder_seg_label.setFont(QFont("Calibri", int(20)))
+        folder_seg_label.setFont(QFont(self.main_font, int(18)))
 
         folder_seg_label_add = QLabel("(Hover over the question mark for more info)")
-        folder_seg_label_add.setFont(QFont("Calibri", int(16)))
+        folder_seg_label_add.setFont(QFont(self.main_font, int(14)))
         folder_seg_label_add.setWordWrap(True)
 
         tooltip_label = QLabel()
@@ -212,7 +213,7 @@ class MyWindow(QWidget):
         #tooltip_label.setToolTipDuration(5000)
 
         # Crete common font
-        font_sub = QFont("Calibri", int(14))
+        font_sub = QFont(self.main_font, int(14))
 
         # Styles
         style_allround = "border-radius: 5px; background-color: lightgrey"
@@ -234,13 +235,14 @@ class MyWindow(QWidget):
         self.next_button = QPushButton()
         self.next_button.setFixedHeight(int(400*self.MF))
         self.next_button.setFixedWidth(int(30*self.MF))
-        self.next_button.setStyleSheet("QPushButton {background-color: transparent;}")
+        self.next_button.setStyleSheet("QPushButton {background-color: rgba(255, 255, 255, 0);}")
+        self.next_button.setFlat(True)
 
         self.prev_button = QPushButton()
         self.prev_button.setFixedHeight(int(400*self.MF))
         self.prev_button.setFixedWidth(int(30*self.MF))
-        self.prev_button.setStyleSheet("QPushButton {background-color: transparent;}")
-
+        self.prev_button.setStyleSheet("QPushButton {background-color: rgba(255, 255, 255, 0);}")
+        self.prev_button.setFlat(True)
 
         # Create data selection widgets
         self.data_path_line = QLineEdit()
@@ -248,7 +250,7 @@ class MyWindow(QWidget):
         self.data_path_line.setStyleSheet(style_right_round)
         self.databrowse_button = QPushButton("Choose Metadata")
         self.databrowse_button.setStyleSheet(style_left_round)
-        self.databrowse_button.setFont(QFont("Calibri",13))
+        self.databrowse_button.setFont(QFont(self.main_font,11))
         self.databrowse_button.setFixedSize(int(130*self.MF), int(44*self.MF))
         
         self.name_error_label = QLabel()
@@ -305,7 +307,7 @@ class MyWindow(QWidget):
 
         
         self.folderbrowse_button = QPushButton("Choose Image\nFolder")
-        self.folderbrowse_button.setFont(QFont("Calibri",14))
+        self.folderbrowse_button.setFont(QFont(self.main_font,12))
         self.folderbrowse_button.setStyleSheet(style_left_round)
         self.folderbrowse_button.setFixedSize(int(130*self.MF), int(44*self.MF))
         
@@ -335,7 +337,7 @@ class MyWindow(QWidget):
         # Now the single-image-exclusive layout
         self.imagebrowse_button = QPushButton("Choose Image")
         self.imagebrowse_button.setStyleSheet(style_left_round)
-        self.imagebrowse_button.setFont(QFont("Calibri",16))
+        self.imagebrowse_button.setFont(QFont(self.main_font,14))
         self.imagebrowse_button.setFixedSize(int(130*self.MF), int(44*self.MF))
         self.segment_folder_button = QPushButton("")
         self.segment_folder_button.setStyleSheet(style_allround)
@@ -356,7 +358,7 @@ class MyWindow(QWidget):
         self.copy_button.setFixedHeight(copy_h)
         #self.copy_button.setFixedWidth(int(30*self.MF))
         self.copy_button.setStyleSheet("QPushButton {background-color: transparent;}")
-
+        self.copy_button.setFlat(True)
 
 
         # Connect button click event to function
@@ -500,7 +502,7 @@ class MyWindow(QWidget):
     def button_active(self, button, loc_icon, active = True):
         """make a button active or inactive"""
         if active:
-            button.setStyleSheet("QPushButton {background-color: transparent;}"
+            button.setStyleSheet("QPushButton {background-color: rgba(255, 255, 255, 0);}"
                                  "QPushButton:hover {background-color: rgba(128, 128, 128, 25);}"
                                  "QPushButton:pressed { background-color: rgba(128, 128, 128, 75); }")
             button.setIcon(loc_icon)
@@ -508,7 +510,7 @@ class MyWindow(QWidget):
             hig = button.frameGeometry().height()
             button.setIconSize(QtCore.QSize(int(wid), int(hig)))
         else:
-            button.setStyleSheet("QPushButton {background-color: transparent;}")
+            button.setStyleSheet("QPushButton {background-color: rgba(255, 255, 255, 0);}")
             button.setIcon(self.none_icon)
             wid = button.frameGeometry().width()
             hig = button.frameGeometry().height()
@@ -684,8 +686,8 @@ class MyWindow(QWidget):
         plt.imshow(filtered_mask, cmap=cmap, interpolation='nearest', alpha = 0.3)
         # Add text
         for centroid,l_text in zip(centroids,region_afctd_extr):
-            plt.text(centroid[1],centroid[0],l_text, ha='center', font = 'Calibri', size = 26)#path_effects=[patheffects.withStroke(linewidth=2, foreground='white')]
-        plt.text(200,395,ID, ha='center', font = 'Calibri', size = 20)#path_effects=[patheffects.withStroke(linewidth=2, foreground='white')]
+            plt.text(centroid[1],centroid[0],l_text, ha='center', font = self.main_font, size = 26)#path_effects=[patheffects.withStroke(linewidth=2, foreground='white')]
+        plt.text(200,395,ID, ha='center', font = self.main_font, size = 20)#path_effects=[patheffects.withStroke(linewidth=2, foreground='white')]
 
         plt.axis('off')
         plt.subplots_adjust(left=0, right=1, top=1, bottom=0)

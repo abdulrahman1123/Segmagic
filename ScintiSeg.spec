@@ -1,9 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+import sys ; sys.setrecursionlimit(sys.getrecursionlimit() * 5)
 
 a = Analysis(
     ['ScintiSeg.py'],
-    pathex=[],
+    pathex=["/home/abdulrahman/git/Segmagic/venv_lin/lib/python3.11/site-packages"],
     binaries=[],
     datas=[],
     hiddenimports=[],
