@@ -1,5 +1,4 @@
 from segmagic_ml_small import Segmagic
-#from tifffile import imread
 from PIL import Image
 import numpy as np
 from skimage.measure import label, regionprops
@@ -8,17 +7,19 @@ import pandas as pd
 import matplotlib
 matplotlib.use('QtAgg')
 import matplotlib.pyplot as plt
-from matplotlib import patheffects
 
+
+import numpy as np
 import os
 import sys
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QButtonGroup,
                              QRadioButton,QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView,
-                             QGridLayout,QDesktopWidget,QFrame,QSizePolicy)
+                             QGridLayout,QFrame,QDesktopWidget,QSizePolicy)
 from qtwidgets import AnimatedToggle
-from PyQt5.QtGui import QPixmap,QFont,QImage,QIcon
+from PyQt5.QtGui import QPixmap,QFont,QImage,QIcon,QGuiApplication
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
+
 
 def find_intensity(image_dir,side_info, model_type, fast_mode):
     """
@@ -132,15 +133,14 @@ def clear_layout(layout):
 
 
 class MyWindow(QWidget):
-    def __init__(self):
+    def __init__(self, log_dpi):
         super().__init__()
         self.setWindowIcon(QIcon(base_path+'\logo.png'))
         self.setWindowTitle("ScintiSeg")
 
         # change window size depending on screen size
-        sc_width = QDesktopWidget().screenGeometry(-1).width()
-        self.MF  = sc_width/1920 # magnification factor
-        self.MFF =sc_width/1920 # magnification factor for fonts
+        #sc_width = QDesktopWidget().screenGeometry(-1).width()
+        self.MF  = log_dpi/96 # magnification factor
         
         # create the global list of images
         self.images = []
@@ -170,7 +170,7 @@ class MyWindow(QWidget):
         
         self.title_label = QLabel("ScintiSeg", self)
         self.title_label.setWordWrap(True)
-        self.title_label.setFont(QFont("Calibri", int(18*self.MFF)))
+        self.title_label.setFont(QFont("Calibri", int(22)))
         self.title_label.setAlignment(Qt.AlignCenter)
 
         renderer = QPixmap(base_path+"/logo.png")
@@ -185,8 +185,8 @@ class MyWindow(QWidget):
             pulse_checked_color="#44FFB000")  # Custom color during pulse animation
         self.toggle.setFixedSize(self.toggle.sizeHint())
 
-        self.toggle_info = QLabel("     Fast segmentation mode")
-        self.toggle_info.setFont(QFont("Calibri",int(14 * self.MFF)))
+        self.toggle_info = QLabel("    Fast segmentation")
+        self.toggle_info.setFont(QFont("Calibri",int(18)))
         toggle_qm_label = QLabel()
         toggle_qm_label.setFixedSize(int(60 * self.MF), int(30 * self.MF))
         toggle_qm_label.setPixmap(qm_icon.scaled(toggle_qm_label.size(), QtCore.Qt.KeepAspectRatio))
@@ -195,13 +195,13 @@ class MyWindow(QWidget):
 
 
         single_img_label = QLabel("Segmenting a Single Image")
-        single_img_label.setFont(QFont("Calibri", int(16 * self.MFF)))
+        single_img_label.setFont(QFont("Calibri", int(20)))
 
         folder_seg_label = QLabel("Segmenting Multiple Images")
-        folder_seg_label.setFont(QFont("Calibri", int(16 * self.MFF)))
+        folder_seg_label.setFont(QFont("Calibri", int(20)))
 
         folder_seg_label_add = QLabel("(Hover over the question mark for more info)")
-        folder_seg_label_add.setFont(QFont("Calibri", int(13 * self.MFF)))
+        folder_seg_label_add.setFont(QFont("Calibri", int(16)))
         folder_seg_label_add.setWordWrap(True)
 
         tooltip_label = QLabel()
@@ -211,38 +211,35 @@ class MyWindow(QWidget):
         tooltip_label.setToolTip(f'<img src="{base_path+"/tooltip.png"}">')
         #tooltip_label.setToolTipDuration(5000)
 
+        # Crete common font
+        font_sub = QFont("Calibri", int(14))
+
         # Styles
         style_allround = "border-radius: 5px; background-color: lightgrey"
         style_right_round = "border-bottom-right-radius: 10px; border-top-right-radius: 10px; border-style: solid; border-width: 1px; border-color: black"
         style_left_round = "border-bottom-left-radius: 10px; border-top-left-radius: 10px; background-color: lightgrey;"
         
-        label_txt = "For single-image analysis\nEither drag and drop an image here, or use\nthe 'Choose Image' button, and press 'Segment Image'"
+        label_txt = "For single-image analysis\nEither drag and drop an image here,\nor use the 'Choose Image' button,\nand press 'Segment Image'"
         self.label1 = image_label(label_txt,self)
         self.label1.setAlignment(Qt.AlignCenter)
         #self.label1.setAcceptDrops(True)
         self.label1.setFixedSize(int(400*self.MF), int(400*self.MF))
         self.label1.setStyleSheet("background-color: white;border-style: solid; border-width: 1px; border-color: black")
-
+        self.label1.setFont(font_sub)
         # Add navigation buttons 
-        next_dir = base_path+"/next.png"
-        prev_dir = base_path+"/prev.png"
+
+        self.next_icon = QIcon(base_path + "/next.png")
+        self.prev_icon = QIcon(base_path + "/prev.png")
+        self.none_icon = QIcon()
         self.next_button = QPushButton()
-        self.next_button.setIcon(QIcon(next_dir))
-        self.next_button.setIconSize(QtCore.QSize(int(30*self.MF),int(400*self.MF)))
         self.next_button.setFixedHeight(int(400*self.MF))
         self.next_button.setFixedWidth(int(30*self.MF))
-        self.next_button.setStyleSheet("QPushButton {background-color: transparent;}"
-                                       "QPushButton:hover {background-color: rgba(128, 128, 128, 25);}"
-                                       "QPushButton:pressed { background-color: rgba(128, 128, 128, 75); }")
+        self.next_button.setStyleSheet("QPushButton {background-color: transparent;}")
 
         self.prev_button = QPushButton()
-        self.prev_button.setIcon(QIcon(prev_dir))
-        self.prev_button.setIconSize(QtCore.QSize(int(30*self.MF),int(400*self.MF)))
         self.prev_button.setFixedHeight(int(400*self.MF))
         self.prev_button.setFixedWidth(int(30*self.MF))
-        self.prev_button.setStyleSheet("QPushButton {background-color: transparent;}"
-                                       "QPushButton:hover {background-color: rgba(128, 128, 128, 25);}"
-                                       "QPushButton:pressed { background-color: rgba(128, 128, 128, 75); }")
+        self.prev_button.setStyleSheet("QPushButton {background-color: transparent;}")
 
 
         # Create data selection widgets
@@ -251,13 +248,12 @@ class MyWindow(QWidget):
         self.data_path_line.setStyleSheet(style_right_round)
         self.databrowse_button = QPushButton("Choose Metadata")
         self.databrowse_button.setStyleSheet(style_left_round)
+        self.databrowse_button.setFont(QFont("Calibri",13))
         self.databrowse_button.setFixedSize(int(130*self.MF), int(44*self.MF))
         
         self.name_error_label = QLabel()
         self.name_error_label.setWordWrap(True)
 
-        # For single-image mode, create radiobuttons and labels
-        font_sub = QFont("Calibri", int(11*self.MFF))
 
         self.aff_side_label = QLabel("Affected side")
         self.aff_side_left = QRadioButton("Left")
@@ -308,7 +304,8 @@ class MyWindow(QWidget):
         self.folder_path_line.setStyleSheet(style_right_round)
 
         
-        self.folderbrowse_button = QPushButton("Choose Image Folder")
+        self.folderbrowse_button = QPushButton("Choose Image\nFolder")
+        self.folderbrowse_button.setFont(QFont("Calibri",14))
         self.folderbrowse_button.setStyleSheet(style_left_round)
         self.folderbrowse_button.setFixedSize(int(130*self.MF), int(44*self.MF))
         
@@ -326,19 +323,6 @@ class MyWindow(QWidget):
         self.segment_img_button.setIconSize(QtCore.QSize(int(100*self.MF),int(40*self.MF)))
         self.segment_img_button.setFixedHeight(int(44*self.MF))
 
-        
-
-        self.single_button = QPushButton()
-        self.single_button.setStyleSheet(style_allround)
-        self.single_button.setFixedHeight(int(44*self.MF))
-        self.single_button.setIcon(QIcon(single_image_dir))
-        self.single_button.setIconSize(QtCore.QSize(int(100*self.MF),int(40*self.MF)))
-
-        self.multiple_button = QPushButton()
-        self.multiple_button.setStyleSheet(style_allround)
-        self.multiple_button.setFixedHeight(int(44*self.MF))
-        self.multiple_button.setIcon(QIcon(multiple_images_dir))
-        self.multiple_button.setIconSize(QtCore.QSize(int(100*self.MF),int(40*self.MF)))
 
 
         self.exit_button = QPushButton("")
@@ -351,6 +335,7 @@ class MyWindow(QWidget):
         # Now the single-image-exclusive layout
         self.imagebrowse_button = QPushButton("Choose Image")
         self.imagebrowse_button.setStyleSheet(style_left_round)
+        self.imagebrowse_button.setFont(QFont("Calibri",16))
         self.imagebrowse_button.setFixedSize(int(130*self.MF), int(44*self.MF))
         self.segment_folder_button = QPushButton("")
         self.segment_folder_button.setStyleSheet(style_allround)
@@ -360,16 +345,17 @@ class MyWindow(QWidget):
         
         self.createTable()
 
+
         # Create the copy button
         copy_dir = base_path+"/copy.png"
+        table_w = self.tableWidget.frameGeometry().width()
+        copy_h = int(table_w*15/400)
+        copy_w = int(copy_h*400/15)
+        self.copy_icon = QIcon(copy_dir)
         self.copy_button = QPushButton()
-        self.copy_button.setIcon(QIcon(copy_dir))
-        self.copy_button.setIconSize(QtCore.QSize(int(400*self.MF),int(15*self.MF)))
-        #self.copy_button.setFixedHeight(int(400*self.MF))
+        self.copy_button.setFixedHeight(copy_h)
         #self.copy_button.setFixedWidth(int(30*self.MF))
-        self.copy_button.setStyleSheet("QPushButton {background-color: transparent;}"
-                                       "QPushButton:hover {background-color: rgba(128, 128, 128, 25);}"
-                                       "QPushButton:pressed { background-color: rgba(128, 128, 128, 75); }")
+        self.copy_button.setStyleSheet("QPushButton {background-color: transparent;}")
 
 
 
@@ -400,11 +386,6 @@ class MyWindow(QWidget):
         self.sciphase_lo.addWidget(self.sciphase_12,1,0,1,1)
         self.sciphase_lo.addWidget(self.sciphase_3,1,1,1,1)
 
-        # Prepare the vertical separator
-        self.separator = QFrame()
-        self.separator.setFrameShape(QFrame.VLine)
-        self.separator.setStyleSheet('color: lightgrey; background-color: transparent')
-        self.separator.setLineWidth(int(10*self.MF))
 
         # prepare the horizontal separator
         Separador1 = QFrame()
@@ -467,14 +448,12 @@ class MyWindow(QWidget):
 
         self.folder_tootlip_lo.addWidget(folder_seg_label)
         self.folder_tootlip_lo.addWidget(tooltip_label)
-        #self.folder_tootlip_lo.addWidget(self.separator)
 
-        self.tableLayout.addWidget(self.tableWidget,0,0,100,1)
-        self.tableLayout.addWidget(self.copy_button,91,0,10,1)
+
+        self.tableLayout.addWidget(self.tableWidget,0,0,8,1)
+        self.tableLayout.addWidget(self.copy_button,7,0,1,1)
 
         # Add all Layouts to the main one
-        #self.right_layout.addWidget(Separador1)
-        #self.right_layout.addWidget(Separador2)
         self.right_layout.addWidget(single_img_label)
         self.right_layout.addLayout(self.image_info_lo)
         self.right_layout.addLayout(self.imageselection_lo)
@@ -485,9 +464,9 @@ class MyWindow(QWidget):
         self.right_layout.addLayout(self.folderselection_lo)
         self.right_layout.addLayout(self.tableLayout)
 
-        self.image_layout.addWidget(self.next_button,0,0,1,40)
-        self.image_layout.addWidget(self.label1,0,0,1,200)
-        self.image_layout.addWidget(self.prev_button,0,185,1,40)
+        self.image_layout.addWidget(self.next_button,0,0,1,1)
+        self.image_layout.addWidget(self.label1,0,0,1,5)
+        self.image_layout.addWidget(self.prev_button,0,4,1,1)
 
         self.left_layout.addLayout(self.title_lo)
         self.left_layout.addLayout(self.image_layout)
@@ -499,6 +478,8 @@ class MyWindow(QWidget):
         
         # Set the layout
         self.setLayout(self.main_layout)
+        center_point = QDesktopWidget().availableGeometry().center()
+        self.move(center_point - self.rect().center())
     def copy_table(self):
         rows = []
         for row in range(self.tableWidget.rowCount()):
@@ -516,46 +497,46 @@ class MyWindow(QWidget):
         else:
             self.fast_mode = False
 
+    def button_active(self, button, loc_icon, active = True):
+        """make a button active or inactive"""
+        if active:
+            button.setStyleSheet("QPushButton {background-color: transparent;}"
+                                 "QPushButton:hover {background-color: rgba(128, 128, 128, 25);}"
+                                 "QPushButton:pressed { background-color: rgba(128, 128, 128, 75); }")
+            button.setIcon(loc_icon)
+            wid = button.frameGeometry().width()
+            hig = button.frameGeometry().height()
+            button.setIconSize(QtCore.QSize(int(wid), int(hig)))
+        else:
+            button.setStyleSheet("QPushButton {background-color: transparent;}")
+            button.setIcon(self.none_icon)
+            wid = button.frameGeometry().width()
+            hig = button.frameGeometry().height()
+            button.setIconSize(QtCore.QSize(int(wid), int(hig)))
+
     def next_image(self):
         if self.im_ind<(len(self.images)-1):
             self.im_ind+=1
             im = self.images[self.im_ind]
             self.plot_mask(im[0],im[1],im[2],im[3],im[4])
 
+            # make sure the previous button icon appears
+            self.button_active(self.prev_button,self.prev_icon, active = True)
+
+        if self.im_ind==(len(self.images)-1):
+            # make sure the next icon disappears when you reach the final image
+            self.button_active(self.next_button,self.none_icon, active = False)
+
     def prev_image(self):
         if self.im_ind>0:
             self.im_ind-=1
             im = self.images[self.im_ind]
             self.plot_mask(im[0],im[1],im[2],im[3],im[4])
-    def build_multiple_lo(self):
-        # OLD FUNCTION ... IGNORE
-        clear_layout(self.main_layout)
-        #self.title_label.setText("ScintiSig")
-        self.createTable()
 
-        # Add all widgets to thier respective layouts
-        self.output_layout.addWidget(self.tableWidget)
-        self.dataselection_lo.addWidget(self.data_path_line)
-        self.dataselection_lo.addWidget(self.databrowse_button)
-        self.imageselection_lo.addWidget(self.img_path_line)
-        self.imageselection_lo.addWidget(self.folderbrowse_button)
-        self.finalset_lo.addWidget(self.segment_folder_button)
-        self.finalset_lo.addWidget(self.single_button)
-        self.finalset_lo.addWidget(self.exit_button)
+            self.button_active(self.next_button, self.next_icon, active=True)
+        if self.im_ind == 0:
+            self.button_active(self.prev_button,self.none_icon, active = False)
 
-        
-        self.title_lo.addWidget(self.logo_label)
-        self.title_lo.addWidget(self.title_label)
-
-        # Add all Layouts to the main one
-        self.main_layout.addLayout(self.title_lo)
-        self.main_layout.addLayout(self.output_layout)
-        self.main_layout.addLayout(self.dataselection_lo)
-        self.main_layout.addLayout(self.imageselection_lo)
-        self.main_layout.addLayout(self.finalset_lo)
-
-        # Set the layout
-        self.setLayout(self.main_layout)
 
         
     def editTable(self, content):
@@ -588,7 +569,7 @@ class MyWindow(QWidget):
         
         #self.tableWidget.resizeColumnsToContents()
 
-        
+
 
     def browse_data(self):
         options = QFileDialog.Options()
@@ -663,6 +644,13 @@ class MyWindow(QWidget):
                     self.im_ind+=1
                     self.plot_mask(image_to_predict, filtered_mask,centroids, region_afctd_extr,image_dir.split("/")[-1].split("\\")[-1])
                     self.editTable(intensity_dic)
+
+                    # make sure that the previous-button icon appears
+                    if self.im_ind > 0:
+                        self.button_active(self.prev_button, self.prev_icon, active=True)
+                    self.button_active(self.copy_button, self.copy_icon, active=True)
+                    self.button_active(self.next_button, self.none_icon, active=False)
+
         else:
             self.name_error_label.setText(f'<font color="darkred">the chosen data frame does not have the needed columns (ID, Side, Extremity)</font>')
     def segment_image(self):
@@ -679,6 +667,12 @@ class MyWindow(QWidget):
             self.im_ind+=1
             self.plot_mask(image_to_predict, filtered_mask,centroids, region_afctd_extr, ID)
             self.editTable(intensity_dic)
+
+            # make sure that the previous-button icon appears
+            if self.im_ind>0:
+                self.button_active(self.prev_button, self.prev_icon, active=True)
+            self.button_active(self.copy_button, self.copy_icon, active=True)
+            self.button_active(self.next_button, self.none_icon, active=False)
     def plot_mask(self,image_to_predict, filtered_mask,centroids, region_afctd_extr,ID):
         color_list = ['steelblue', 'indianred','olivedrab','darkgoldenrod','darkmagenta','grey','palevioletred','sienna','beige','coral']
 
@@ -733,7 +727,9 @@ class image_label(QLabel):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MyWindow()
+    primary_screen = app.primaryScreen()
+    logical_dpi = primary_screen.logicalDotsPerInch()
+    window = MyWindow(logical_dpi)
     window.show()
     sys.exit(app.exec_())
 

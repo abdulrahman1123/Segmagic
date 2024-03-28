@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['//klinik.uni-wuerzburg.de/homedir/userdata11/Sawalma_A/data/Documents/GitHub/Segmagic/ScintiSeg.py'],
+    ['ScintiSeg.py'],
     pathex=[],
     binaries=[],
     datas=[],

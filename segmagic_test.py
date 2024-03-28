@@ -1,6 +1,7 @@
 import os
 import glob
 import sys
+import pandas
 
 # Done: figure out the current exe directory
 if hasattr(sys, '_MEIPASS'):

@@ -11,3 +11,11 @@ segmagic_test.spec
 temp_file.png
 Thumbs.db
 .~lock.pt_info.xlsx#
+/build
+/dist
+/hand
+/hand
+/venv
+/hand
+/hand
+/model
