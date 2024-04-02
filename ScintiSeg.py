@@ -186,7 +186,7 @@ class MyWindow(QWidget):
             pulse_checked_color="#44FFB000")  # Custom color during pulse animation
         self.toggle.setFixedSize(self.toggle.sizeHint())
 
-        self.toggle_info = QLabel("    Fast segmentation")
+        self.toggle_info = QLabel("    Fast segment.")
         self.toggle_info.setFont(QFont(self.main_font,int(16)))
         toggle_qm_label = QLabel()
         toggle_qm_label.setFixedSize(int(60 * self.MF), int(30 * self.MF))
