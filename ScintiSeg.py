@@ -10,7 +10,6 @@ matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 
 
-import numpy as np
 import os
 import sys
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QButtonGroup,
@@ -136,7 +135,7 @@ def clear_layout(layout):
 class MyWindow(QWidget):
     def __init__(self, log_dpi):
         super().__init__()
-        self.setWindowIcon(QIcon(base_path+'\logo.png'))
+        self.setWindowIcon(QIcon(base_path+'\logo_icon.ico'))
         self.setWindowTitle("ScintiSeg")
 
         # change window size depending on screen size
@@ -347,16 +346,20 @@ class MyWindow(QWidget):
         
         self.createTable()
 
+        table_w = int(self.MF*500)
+        copy_h = int(table_w * 15 / 400)
+        copy_w = int(copy_h * 400 / 15)
+        table_w = copy_w
 
+        self.tableWidget.setFixedWidth(table_w)
         # Create the copy button
         copy_dir = base_path+"/copy.png"
-        table_w = self.tableWidget.frameGeometry().width()
-        copy_h = int(table_w*15/400)
-        copy_w = int(copy_h*400/15)
+
         self.copy_icon = QIcon(copy_dir)
         self.copy_button = QPushButton()
+
+        self.copy_button.setFixedWidth(copy_w)
         self.copy_button.setFixedHeight(copy_h)
-        #self.copy_button.setFixedWidth(int(30*self.MF))
         self.copy_button.setStyleSheet("QPushButton {background-color: transparent;}")
         self.copy_button.setFlat(True)
 
