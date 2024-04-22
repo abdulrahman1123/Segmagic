@@ -14,7 +14,7 @@ import os
 import sys
 from PyQt5.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QButtonGroup,
                              QRadioButton,QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QHeaderView,
-                             QGridLayout,QFrame,QDesktopWidget,QSizePolicy)
+                             QGridLayout,QFrame,QDesktopWidget,QSizePolicy, QAbstractScrollArea)
 from qtwidgets import AnimatedToggle
 from PyQt5.QtGui import QPixmap,QFont,QImage,QIcon,QGuiApplication
 from PyQt5 import QtCore
@@ -94,6 +94,7 @@ def find_intensity(image_dir,side_info, model_type, fast_mode):
     intensity_dic['ipsi'] = ", ".join(np.round(np.array(intensity_dic['ipsi']),1).astype(str))
     intensity_dic['contra'] = ", ".join(np.round(np.array(intensity_dic['contra']),1).astype(str))
     intensity_dic['ratio'] = ", ".join(np.round(np.array(intensity_dic['ratio']),2).astype(str))
+    
     filtered_mask = simple_filtered_mask[:,:,0]
     for layer in range(1,simple_filtered_mask.shape[2]):
         filtered_mask[simple_filtered_mask[:, :, layer] == 1] = 1
@@ -282,16 +283,15 @@ class MyWindow(QWidget):
 
 
         self.sciphase_label = QLabel("Scinti. phase")
-        self.sciphase_12 = QRadioButton("1 or 2")
-        self.sciphase_12.setChecked(True)
+        self.sciphase_1 = QRadioButton("1")
+        self.sciphase_1.setChecked(True)
+        self.sciphase_2 = QRadioButton("2")
         self.sciphase_3 = QRadioButton("3")
         #self.sciphase_label.setAlignment(Qt.AlignCenter)
         self.sciphase_label.setFont(font_sub)
-        self.sciphase_12.setFont(font_sub)
+        self.sciphase_1.setFont(font_sub)
+        self.sciphase_2.setFont(font_sub)
         self.sciphase_3.setFont(font_sub)
-        self.sciphase_but_group = QButtonGroup(self)
-        self.sciphase_but_group.addButton(self.sciphase_12)
-        self.sciphase_but_group.addButton(self.sciphase_3)
         
         self.spacer_label = QLabel("   ")
 
@@ -344,21 +344,27 @@ class MyWindow(QWidget):
         self.segment_folder_button.setIconSize(QtCore.QSize(int(80*self.MF),int(80*self.MF)))
         self.segment_folder_button.setFixedHeight(int(88*self.MF))
         
-        self.createTable()
-
-        table_w = int(self.MF*500)
-        copy_h = int(table_w * 15 / 400)
+        self.table_w = int(self.MF*500)
+        copy_h = int(self.table_w * 15 / 400)
         copy_w = int(copy_h * 400 / 15)
-        table_w = copy_w
+        self.table_w = copy_w
 
-        self.tableWidget.setFixedWidth(table_w)
+        self.createTable()
+        self.table_ex = QLabel('Note: for hand images in phase 3, the results consist of three values: Carpal, MCP and IP joints resepctively')
+        self.table_ex.setWordWrap(True)
+        self.table_ex.setFont(QFont(self.main_font, int(10)))
+        self.table_ex.setAlignment(Qt.AlignCenter)
+        self.table_ex.setFixedWidth(self.table_w)
+
+
+        self.tableWidget.setFixedWidth(self.table_w)
         # Create the copy button
         copy_dir = base_path+"/copy.png"
 
         self.copy_icon = QIcon(copy_dir)
         self.copy_button = QPushButton()
 
-        self.copy_button.setFixedWidth(copy_w)
+        self.copy_button.setFixedWidth(int(0.8*copy_w))
         self.copy_button.setFixedHeight(copy_h)
         self.copy_button.setStyleSheet("QPushButton {background-color: transparent;}")
         self.copy_button.setFlat(True)
@@ -388,8 +394,9 @@ class MyWindow(QWidget):
         self.handfoot_lo.addWidget(self.handfoot_foot,1,1,1,1)
 
         self.sciphase_lo.addWidget(self.sciphase_label,0,0,1,2)
-        self.sciphase_lo.addWidget(self.sciphase_12,1,0,1,1)
-        self.sciphase_lo.addWidget(self.sciphase_3,1,1,1,1)
+        self.sciphase_lo.addWidget(self.sciphase_1,1,0,1,1)
+        self.sciphase_lo.addWidget(self.sciphase_2,1,1,1,1)
+        self.sciphase_lo.addWidget(self.sciphase_3,1,2,1,1)
 
 
         # prepare the horizontal separator
@@ -455,8 +462,10 @@ class MyWindow(QWidget):
         self.folder_tootlip_lo.addWidget(tooltip_label)
 
 
-        self.tableLayout.addWidget(self.tableWidget,0,0,8,1)
-        self.tableLayout.addWidget(self.copy_button,7,0,1,1)
+        self.tableLayout.addWidget(self.tableWidget,0,0,8,10)
+        self.tableLayout.addWidget(self.copy_button,7,1,1,8)
+        self.tableLayout.addWidget(self.table_ex,8,0,1,10)
+        
 
         # Add all Layouts to the main one
         self.right_layout.addWidget(single_img_label)
@@ -493,8 +502,27 @@ class MyWindow(QWidget):
                 item = self.tableWidget.item(row, col).text()
                 cols.append(item)
             rows.append(cols)
-        df = pd.DataFrame(rows, columns = ['ID','Ipsi','Contra','Ratio'])
-        df.to_clipboard(index = False)
+        df = pd.DataFrame(rows, columns = ['ID','Limb','Phase','Ipsi','Contra','Ratio'])
+        n_phases = len(np.unique(df['Phase']))
+
+        val_cols = ['Limb','Ipsi','Contra','Ratio']
+        new_df = df.pivot(index='ID',values = val_cols, columns='Phase')
+        colnames = []
+        for colname in val_cols:
+            for i in range(1,n_phases+1):
+                colnames.append(f'{colname}_P{str(i)}')
+
+        new_df.columns = colnames
+        new_df['ID'] = new_df.index
+        new_df.reset_index(drop = True, inplace=True)
+
+        for item in ['Limb_P2','Limb_P3']:
+            if item in new_df.columns:
+                new_df.drop(item,axis = 1, inplace=True)
+
+        new_df.rename({'Limb_P1':'Limb'},axis = 1,inplace=True)
+        new_df = new_df[['ID']+list(new_df.columns)[0:-1]]
+        new_df.to_clipboard(index = False)
 
     def toggle_changed(self):
         if self.toggle.isChecked():
@@ -554,25 +582,34 @@ class MyWindow(QWidget):
         ratio = QTableWidgetItem(content['ratio'])
         ratio.setTextAlignment(Qt.AlignCenter)
 
-        id = QTableWidgetItem(content['id'])
+        id = QTableWidgetItem('_'.join(content['id'].split('_')[0:-2]))
         id.setTextAlignment(Qt.AlignCenter)
+        limb = QTableWidgetItem(content['id'].split('_')[-1])
+        limb.setTextAlignment(Qt.AlignCenter)
+        phase = QTableWidgetItem(content['id'].split('_')[-2])
+        phase.setTextAlignment(Qt.AlignCenter)
         self.tableWidget.setItem(current_row_count, 0, id)
-        self.tableWidget.setItem(current_row_count, 1, ipsi)
-        self.tableWidget.setItem(current_row_count, 2, contra)
-        self.tableWidget.setItem(current_row_count, 3, ratio)
+        self.tableWidget.setItem(current_row_count, 1, limb)
+        self.tableWidget.setItem(current_row_count, 2, phase)
+        self.tableWidget.setItem(current_row_count, 3, ipsi)
+        self.tableWidget.setItem(current_row_count, 4, contra)
+        self.tableWidget.setItem(current_row_count, 5, ratio)
   
         
     def createTable(self):
         self.tableWidget = QTableWidget()
         self.tableWidget.setRowCount(0)
-        self.tableWidget.setColumnCount(4) 
-        self.tableWidget.setHorizontalHeaderLabels(["ID","Ipsi", "Contra","Ratio"])
+        self.tableWidget.setColumnCount(6) 
+        self.tableWidget.setHorizontalHeaderLabels(["ID","Limb","Phase","Ipsi", "Contra","Ratio"])
         self.tableWidget.setMinimumHeight(int(200*self.MF))
         self.tableWidget.setMinimumWidth(int(450*self.MF))
         #self.tableWidget.horizontalHeader().setStretchLastSection(True)  # Stretch the last section
-        self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Resize mode
-        
-        #self.tableWidget.resizeColumnsToContents()
+        #self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Resize mode
+        self.tableWidget.setColumnWidth(0, int(2*self.table_w/13))
+        self.tableWidget.setColumnWidth(1, int(self.table_w/13))
+        self.tableWidget.setColumnWidth(2, int(self.table_w/13))
+
+
 
 
 
@@ -637,14 +674,18 @@ class MyWindow(QWidget):
                     splitname = ".".join(fn.split(".")[0:-1]).split("_")
                     id,phase = splitname
                     extremity = data.loc[data['ID']==id,'Extremity'].values[0].lower()
-                    model_type = 'hand' if 'up' in extremity else 'foot'
+                    model_type = 'hand' if (('up' in extremity) or ('hand' in extremity)) else 'foot'
 
                     # hand_p3 is a special model for the hands
                     model_type = 'hand_p3'if model_type+phase == 'hand3' else model_type
+                    
+                    affected_limb = 'hand' if model_type.startswith('hand') else 'foot'
+
                     side_info = data.loc[data['ID']==id,'Side'].values[0].lower()
                     
                     ID = image_dir.split("/")[-1].split("\\")[-1]
                     image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info, model_type, self.fast_mode)
+                    intensity_dic['id'] += f'_{affected_limb}'
                     self.images.append([image_to_predict,filtered_mask,centroids, region_afctd_extr,ID])
                     self.im_ind+=1
                     self.plot_mask(image_to_predict, filtered_mask,centroids, region_afctd_extr,image_dir.split("/")[-1].split("\\")[-1])
@@ -663,10 +704,17 @@ class MyWindow(QWidget):
         if os.path.exists(image_dir):
             side_info = "left" if self.aff_side_left.isChecked() else "right"
             model_type = "hand" if self.handfoot_hand.isChecked() else "foot"
-            phase = "3" if self.sciphase_3.isChecked() else "12"
+            phase = "1"
+            if self.sciphase_2.isChecked():
+                phase = "2"
+            if self.sciphase_3.isChecked():
+                phase = "3"
             
-            model_type = 'hand_p3'if model_type+phase == 'hand3' else model_type
+            model_type = 'hand_p3' if model_type+phase == 'hand3' else model_type
+            affected_limb = 'hand' if model_type.startswith('hand') else 'foot'
             image_to_predict,filtered_mask, centroids, region_afctd_extr, intensity_dic = find_intensity(image_dir,side_info, model_type, self.fast_mode)
+            intensity_dic['id'] += f'_{phase}_{affected_limb}'
+
             ID = image_dir.split("/")[-1].split("\\")[-1]
             self.images.append([image_to_predict,filtered_mask,centroids, region_afctd_extr,ID])
             self.im_ind+=1
