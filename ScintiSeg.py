@@ -21,6 +21,10 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 from matplotlib import rcsetup
 
+from inspect import getsourcefile
+
+
+
 def find_intensity(image_dir,side_info, model_type, fast_mode):
     """
     Find segments of ipsilateral and contralateral sides and calculate the intensity inside each region.
@@ -111,8 +115,14 @@ if hasattr(sys, '_MEIPASS') and False:
     base_path = sys._MEIPASS
 else:
     base_path = os.getcwd()
+
+# in mac OS, the path is given as follows
+if os.name =='posix':
+    base_path = os.path.dirname(os.path.abspath(__file__))
+
 if os.path.exists(base_path+"/_internal"):
     base_path = base_path+"/_internal"
+print('Base path is',base_path)
 #data = pd.read_excel(base_path+'/pt_info.xlsx')
 #image_dir = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic\all_images\CRPS007_1.tiff"
 #image_dir = r"\\klinik.uni-wuerzburg.de\homedir\userdata11\Sawalma_A\data\Documents\opg paper\Segmagic\all_images\CRPS007_2.png"
