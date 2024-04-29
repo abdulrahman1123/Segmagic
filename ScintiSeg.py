@@ -513,6 +513,8 @@ class MyWindow(QWidget):
                 cols.append(item)
             rows.append(cols)
         df = pd.DataFrame(rows, columns = ['ID','Limb','Phase','Ipsi','Contra','Ratio'])
+        df.drop_duplicates(inplace =True)
+
         n_phases = len(np.unique(df['Phase']))
 
         val_cols = ['Limb','Ipsi','Contra','Ratio']
@@ -636,7 +638,7 @@ class MyWindow(QWidget):
 
     def browse_image(self):
         options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select image", "", "Images (*.tif);;All Files (*)", options=options)
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select image", "", "TIF images (*.tif);PNG images (*.png);JPG images (*.jpg);All Files (*)", options=options)
         if file_path:
             self.img_path_line.setText(file_path)
             self.load_image()
