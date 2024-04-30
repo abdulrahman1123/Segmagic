@@ -97,7 +97,7 @@ def find_intensity(image_dir,side_info, model_type, fast_mode):
 
     intensity_dic['ipsi'] = ", ".join(np.round(np.array(intensity_dic['ipsi']),1).astype(str))
     intensity_dic['contra'] = ", ".join(np.round(np.array(intensity_dic['contra']),1).astype(str))
-    intensity_dic['ratio'] = ", ".join(np.round(np.array(intensity_dic['ratio']),2).astype(str))
+    intensity_dic['ratio'] = ", ".join(np.round(np.array(intensity_dic['ratio']),1).astype(str))
     
     filtered_mask = simple_filtered_mask[:,:,0]
     for layer in range(1,simple_filtered_mask.shape[2]):
@@ -354,7 +354,7 @@ class MyWindow(QWidget):
         self.segment_folder_button.setIconSize(QtCore.QSize(int(80*self.MF),int(80*self.MF)))
         self.segment_folder_button.setFixedHeight(int(88*self.MF))
         
-        self.table_w = int(self.MF*500)
+        self.table_w = int(self.MF*510)
         copy_h = int(self.table_w * 15 / 400)
         copy_w = int(copy_h * 400 / 15)
         self.table_w = copy_w
