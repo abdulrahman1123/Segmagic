@@ -47,7 +47,7 @@ def find_intensity(image_dir,side_info, model_type, fast_mode):
     labeled_mask = label(predicted_mask)
     region_inds, region_count = np.unique(labeled_mask, return_counts=True)
     n_major_masks = len(np.where(region_count>1500)[0])-1
-    
+
     # if the resulting mask is just one big mask, add a vertical line to split the image into two
     if n_major_masks==1:
         print("\nOne big region was found. Splitting using a vertical line\n")
@@ -67,7 +67,7 @@ def find_intensity(image_dir,side_info, model_type, fast_mode):
         filtered_mask [filtered_mask== np.unique(filtered_mask)[i]] = i
 
     filtered_regions = label(filtered_mask)
-    
+
     img = image_to_predict.transpose((1,2,0))
     props_list = [regionprops(filtered_regions[:,:,i],img) for i in range(filtered_regions.shape[2])]
 
@@ -98,7 +98,7 @@ def find_intensity(image_dir,side_info, model_type, fast_mode):
     intensity_dic['ipsi'] = ", ".join(np.round(np.array(intensity_dic['ipsi']),1).astype(str))
     intensity_dic['contra'] = ", ".join(np.round(np.array(intensity_dic['contra']),1).astype(str))
     intensity_dic['ratio'] = ", ".join(np.round(np.array(intensity_dic['ratio']),1).astype(str))
-    
+
     filtered_mask = simple_filtered_mask[:,:,0]
     for layer in range(1,simple_filtered_mask.shape[2]):
         filtered_mask[simple_filtered_mask[:, :, layer] == 1] = 1
@@ -152,6 +152,7 @@ class MyWindow(QWidget):
         # change window size depending on screen size
         #sc_width = QDesktopWidget().screenGeometry(-1).width()
         self.MF  = log_dpi/96 # magnification factor
+
         self.main_font = 'Arial'
         # create the global list of images
         self.images = []
@@ -196,7 +197,7 @@ class MyWindow(QWidget):
             pulse_checked_color="#44FFB000")  # Custom color during pulse animation
         self.toggle.setFixedSize(self.toggle.sizeHint())
 
-        self.toggle_info = QLabel("    Fast segment.")
+        self.toggle_info = QLabel("  Fast segment.")
         self.toggle_info.setFont(QFont(self.main_font,int(16)))
         toggle_qm_label = QLabel()
         toggle_qm_label.setFixedSize(int(60 * self.MF), int(30 * self.MF))
@@ -355,6 +356,8 @@ class MyWindow(QWidget):
         self.segment_folder_button.setFixedHeight(int(88*self.MF))
         
         self.table_w = int(self.MF*510)
+        if os.name =='posix':
+            self.table_w = int(self.MF * 700)
         copy_h = int(self.table_w * 15 / 400)
         copy_w = int(copy_h * 400 / 15)
         self.table_w = copy_w
@@ -617,9 +620,12 @@ class MyWindow(QWidget):
         self.tableWidget.setMinimumWidth(int(450*self.MF))
         #self.tableWidget.horizontalHeader().setStretchLastSection(True)  # Stretch the last section
         #self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Resize mode
-        self.tableWidget.setColumnWidth(0, int(2*self.table_w/13))
-        self.tableWidget.setColumnWidth(1, int(self.table_w/13))
-        self.tableWidget.setColumnWidth(2, int(self.table_w/13))
+        self.tableWidget.setColumnWidth(0, int(2*(self.table_w)/13))
+        self.tableWidget.setColumnWidth(1, int((self.table_w)/13)+5)
+        self.tableWidget.setColumnWidth(2, int((self.table_w)/13))
+        self.tableWidget.setColumnWidth(3, int(3*(self.table_w)/13))
+        self.tableWidget.setColumnWidth(4, int(3*(self.table_w)/13))
+        self.tableWidget.setColumnWidth(5, int(3*(self.table_w)/13)-25)
 
 
 
