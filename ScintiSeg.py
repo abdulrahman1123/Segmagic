@@ -625,7 +625,7 @@ class MyWindow(QWidget):
         self.tableWidget.setColumnWidth(2, int((self.table_w)/13))
         self.tableWidget.setColumnWidth(3, int(3*(self.table_w)/13))
         self.tableWidget.setColumnWidth(4, int(3*(self.table_w)/13))
-        self.tableWidget.setColumnWidth(5, int(3*(self.table_w)/13)-25)
+        self.tableWidget.setColumnWidth(5, int(3*(self.table_w)/13)-45)
 
 
 
