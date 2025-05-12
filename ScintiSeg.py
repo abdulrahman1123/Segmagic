@@ -118,7 +118,7 @@ else:
 
 # in mac OS, the path is given as follows
 if os.name =='posix':
-    base_path = os.path.dirname(os.path.abspath(__file__))
+    base_path = os.path.dirname(os.path.abspath(__name__)) # it was __file__ before I changed it due to an error while excusion
 
 if os.path.exists(base_path+"/_internal"):
     base_path = base_path+"/_internal"
@@ -146,7 +146,7 @@ def clear_layout(layout):
 class MyWindow(QWidget):
     def __init__(self, log_dpi):
         super().__init__()
-        self.setWindowIcon(QIcon(base_path+'\logo_icon.ico'))
+        self.setWindowIcon(QIcon(base_path+'/logo_icon.ico'))
         self.setWindowTitle("ScintiSeg")
 
         # change window size depending on screen size
